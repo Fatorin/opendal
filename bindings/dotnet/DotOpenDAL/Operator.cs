@@ -109,14 +109,28 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native write fails.</exception>
     public void Write(string path, byte[] content)
     {
+        Write(path, content, executor: null);
+    }
+
+    /// <summary>
+    /// Writes the specified content to a path using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="content">Bytes to write.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
+    /// <exception cref="OpenDALException">Native write fails.</exception>
+    public void Write(string path, byte[] content, Executor? executor)
+    {
         ArgumentNullException.ThrowIfNull(content);
         ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
 
         unsafe
         {
             fixed (byte* ptr = content)
             {
-                var result = NativeMethods.operator_write(this, path, ptr, (nuint)content.Length);
+                var result = NativeMethods.operator_write(this, executorHandle, path, ptr, (nuint)content.Length);
                 if (result.Error.IsError)
                 {
                     throw new OpenDALException(result.Error);
@@ -137,9 +151,30 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native write submission fails immediately.</exception>
     public unsafe Task WriteAsync(string path, byte[] content, CancellationToken cancellationToken = default)
     {
+        return WriteAsync(path, content, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes the specified content to a path asynchronously using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="content">Bytes to write.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
+    /// <exception cref="OpenDALException">Native write submission fails immediately.</exception>
+    public unsafe Task WriteAsync(
+        string path,
+        byte[] content,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(content);
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         cancellationToken.ThrowIfCancellationRequested();
+        var executorHandle = GetExecutorHandle(executor);
 
         var state = new WriteAsyncState();
         var context = AsyncStateRegistry.Register(state);
@@ -149,6 +184,7 @@ public partial class Operator : SafeHandle
         {
             result = NativeMethods.operator_write_async(
                 this,
+                executorHandle,
                 path,
                 ptr,
                 (nuint)content.Length,
@@ -183,9 +219,23 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native read fails.</exception>
     public byte[] Read(string path)
     {
-        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        return Read(path, executor: null);
+    }
 
-        var result = NativeMethods.operator_read(this, path);
+    /// <summary>
+    /// Reads all bytes from a path using the provided executor.
+    /// </summary>
+    /// <param name="path">Source path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <returns>The content bytes.</returns>
+    /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
+    /// <exception cref="OpenDALException">Native read fails.</exception>
+    public byte[] Read(string path, Executor? executor)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        var result = NativeMethods.operator_read(this, executorHandle, path);
         if (result.Error.IsError)
         {
             throw new OpenDALException(result.Error);
@@ -220,14 +270,34 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native read submission fails immediately.</exception>
     public unsafe Task<byte[]> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
+        return ReadAsync(path, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads all bytes from a path asynchronously using the provided executor.
+    /// </summary>
+    /// <param name="path">Source path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that resolves with the read content.</returns>
+    /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
+    /// <exception cref="OpenDALException">Native read submission fails immediately.</exception>
+    public unsafe Task<byte[]> ReadAsync(
+        string path,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         cancellationToken.ThrowIfCancellationRequested();
+        var executorHandle = GetExecutorHandle(executor);
 
         var state = new ReadAsyncState();
         var context = AsyncStateRegistry.Register(state);
 
         var result = NativeMethods.operator_read_async(
             this,
+            executorHandle,
             path,
             &OnReadCompleted,
             new IntPtr(context));
@@ -258,6 +328,17 @@ public partial class Operator : SafeHandle
     {
         NativeMethods.operator_free(handle);
         return true;
+    }
+
+    private static IntPtr GetExecutorHandle(Executor? executor)
+    {
+        if (executor is null)
+        {
+            return IntPtr.Zero;
+        }
+
+        ObjectDisposedException.ThrowIf(executor.IsClosed || executor.IsInvalid, executor);
+        return executor.DangerousGetHandle();
     }
 
     /// <summary>

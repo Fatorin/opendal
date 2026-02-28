@@ -17,6 +17,7 @@
 
 use crate::{
     byte_buffer::ByteBuffer,
+    executor::executor_or_default,
     error::OpenDALError,
     result::{OpendalByteBufferResult, OpendalIntPtrResult, OpendalResult},
     utils::{
@@ -26,17 +27,9 @@ use crate::{
 
 use std::ffi::c_void;
 use std::os::raw::c_char;
-use std::sync::LazyLock;
 
 type WriteCallback = unsafe extern "C" fn(context: *mut c_void, result: OpendalResult);
 type ReadCallback = unsafe extern "C" fn(context: *mut c_void, result: OpendalByteBufferResult);
-
-static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-});
 
 /// Construct an OpenDAL operator instance from a scheme and key/value options.
 ///
@@ -99,11 +92,12 @@ pub unsafe extern "C" fn operator_free(op: *mut opendal::Operator) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_write(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
     data: *const u8,
     len: usize,
 ) -> OpendalResult {
-    match unsafe { operator_write_inner(op, path, data, len) } {
+    match unsafe { operator_write_inner(op, executor, path, data, len) } {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
@@ -111,11 +105,13 @@ pub unsafe extern "C" fn operator_write(
 
 unsafe fn operator_write_inner(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
     data: *const u8,
     len: usize,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
+    let executor = unsafe { executor_or_default(executor) }?;
     let path = require_cstr(path, "path")?;
     require_data_ptr(data, len)?;
 
@@ -125,7 +121,7 @@ unsafe fn operator_write_inner(
         unsafe { std::slice::from_raw_parts(data, len) }
     };
 
-    RUNTIME
+    executor
         .block_on(op.write(path, payload))
         .map(|_| ())
         .map_err(OpenDALError::from_opendal_error)
@@ -141,9 +137,10 @@ unsafe fn operator_write_inner(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_read(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
 ) -> OpendalByteBufferResult {
-    match unsafe { operator_read_inner(op, path) } {
+    match unsafe { operator_read_inner(op, executor, path) } {
         Ok(value) => OpendalByteBufferResult::ok(value),
         Err(error) => OpendalByteBufferResult::from_error(error),
     }
@@ -151,11 +148,13 @@ pub unsafe extern "C" fn operator_read(
 
 unsafe fn operator_read_inner(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
 ) -> Result<ByteBuffer, OpenDALError> {
     let op = require_operator(op)?;
+    let executor = unsafe { executor_or_default(executor) }?;
     let path = require_cstr(path, "path")?;
-    let value = RUNTIME
+    let value = executor
         .block_on(op.read(path))
         .map(|v| v.to_vec())
         .map_err(OpenDALError::from_opendal_error)?;
@@ -178,13 +177,14 @@ unsafe fn operator_read_inner(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_write_async(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
     data: *const u8,
     len: usize,
     callback: Option<WriteCallback>,
     context: *mut c_void,
 ) -> OpendalResult {
-    match unsafe { operator_write_async_inner(op, path, data, len, callback, context) } {
+    match unsafe { operator_write_async_inner(op, executor, path, data, len, callback, context) } {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
@@ -192,6 +192,7 @@ pub unsafe extern "C" fn operator_write_async(
 
 unsafe fn operator_write_async_inner(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
     data: *const u8,
     len: usize,
@@ -199,6 +200,7 @@ unsafe fn operator_write_async_inner(
     context: *mut c_void,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
+    let executor = unsafe { executor_or_default(executor) }?;
     let path = require_cstr(path, "path")?.to_string();
     require_data_ptr(data, len)?;
     let callback = require_callback(callback)?;
@@ -211,7 +213,7 @@ unsafe fn operator_write_async_inner(
 
     let op = op.clone();
     let context = context as usize;
-    RUNTIME.spawn(async move {
+    executor.spawn(async move {
         let result = op
             .write(&path, payload)
             .await
@@ -247,11 +249,12 @@ unsafe fn operator_write_async_inner(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_read_async(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
     callback: Option<ReadCallback>,
     context: *mut c_void,
 ) -> OpendalResult {
-    match unsafe { operator_read_async_inner(op, path, callback, context) } {
+    match unsafe { operator_read_async_inner(op, executor, path, callback, context) } {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
@@ -259,17 +262,19 @@ pub unsafe extern "C" fn operator_read_async(
 
 unsafe fn operator_read_async_inner(
     op: *const opendal::Operator,
+    executor: *const c_void,
     path: *const c_char,
     callback: Option<ReadCallback>,
     context: *mut c_void,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
+    let executor = unsafe { executor_or_default(executor) }?;
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
 
     let op = op.clone();
     let context = context as usize;
-    RUNTIME.spawn(async move {
+    executor.spawn(async move {
         let result = op
             .read(&path)
             .await

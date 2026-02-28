@@ -40,16 +40,17 @@ internal partial class NativeMethods
 
     [LibraryImport(__DllName, EntryPoint = "operator_write", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    internal static unsafe partial OpenDALResult operator_write(Operator op, string path, byte* data, nuint len);
+    internal static unsafe partial OpenDALResult operator_write(Operator op, IntPtr executor, string path, byte* data, nuint len);
 
     [LibraryImport(__DllName, EntryPoint = "operator_read", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    internal static partial OpenDALByteBufferResult operator_read(Operator op, string path);
+    internal static partial OpenDALByteBufferResult operator_read(Operator op, IntPtr executor, string path);
 
     [LibraryImport(__DllName, EntryPoint = "operator_write_async", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static unsafe partial OpenDALResult operator_write_async(
         Operator op,
+        IntPtr executor,
         string path,
         byte* data,
         nuint len,
@@ -60,9 +61,18 @@ internal partial class NativeMethods
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static unsafe partial OpenDALResult operator_read_async(
         Operator op,
+        IntPtr executor,
         string path,
         delegate* unmanaged[Cdecl]<IntPtr, OpenDALByteBufferResult, void> callback,
         IntPtr context);
+
+    [LibraryImport(__DllName, EntryPoint = "executor_create")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALIntPtrResult executor_create(nuint threads);
+
+    [LibraryImport(__DllName, EntryPoint = "executor_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void executor_free(IntPtr executor);
 
     [LibraryImport(__DllName, EntryPoint = "string_ptr_free")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
