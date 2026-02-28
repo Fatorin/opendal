@@ -17,94 +17,19 @@
 
 use crate::{
     byte_buffer::ByteBuffer,
-    error::ErrorCode,
-    result::{
-        OpenDALError, OpendalByteBufferResult, OpendalIntPtrResult, OpendalResult,
-        make_error, ok_buffer_result, ok_ptr_result, ok_result,
+    error::OpenDALError,
+    result::{OpendalByteBufferResult, OpendalIntPtrResult, OpendalResult},
+    utils::{
+        collect_options, require_callback, require_cstr, require_data_ptr, require_operator,
     },
-    utils::cstr_to_str,
 };
 
-use std::collections::HashMap;
 use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::sync::LazyLock;
 
 type WriteCallback = unsafe extern "C" fn(context: *mut c_void, result: OpendalResult);
 type ReadCallback = unsafe extern "C" fn(context: *mut c_void, result: OpendalByteBufferResult);
-
-fn config_invalid_error(message: impl Into<String>) -> OpenDALError {
-    make_error(ErrorCode::ConfigInvalid, message.into())
-}
-
-fn from_opendal_error(error: opendal::Error) -> OpenDALError {
-    make_error(ErrorCode::from_error_kind(error.kind()), error.to_string())
-}
-
-fn invalid_utf8_message(field: &str) -> String {
-    format!("{field} is null or invalid UTF-8")
-}
-
-fn invalid_utf8_message_at(field: &str, index: usize) -> String {
-    format!("{field} at index {index} is null or invalid UTF-8")
-}
-
-fn require_cstr<'a>(value: *const c_char, field: &str) -> Result<&'a str, OpenDALError> {
-    cstr_to_str(value).ok_or_else(|| config_invalid_error(invalid_utf8_message(field)))
-}
-
-fn require_cstr_at<'a>(
-    value: *const c_char,
-    field: &str,
-    index: usize,
-) -> Result<&'a str, OpenDALError> {
-    cstr_to_str(value)
-        .ok_or_else(|| config_invalid_error(invalid_utf8_message_at(field, index)))
-}
-
-fn require_operator<'a>(op: *const opendal::Operator) -> Result<&'a opendal::Operator, OpenDALError> {
-    if op.is_null() {
-        return Err(config_invalid_error("operator pointer is null"));
-    }
-
-    Ok(unsafe { &*op })
-}
-
-fn require_data_ptr(data: *const u8, len: usize) -> Result<(), OpenDALError> {
-    if len > 0 && data.is_null() {
-        return Err(config_invalid_error("data pointer is null while len > 0"));
-    }
-
-    Ok(())
-}
-
-fn require_callback<T>(callback: Option<T>) -> Result<T, OpenDALError> {
-    callback.ok_or_else(|| config_invalid_error("callback pointer is null"))
-}
-
-unsafe fn collect_options(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-) -> Result<HashMap<String, String>, OpenDALError> {
-    if len > 0 && (keys.is_null() || values.is_null()) {
-        return Err(config_invalid_error(
-            "keys or values pointer is null while len > 0",
-        ));
-    }
-
-    let mut options = HashMap::<String, String>::with_capacity(len);
-    for index in 0..len {
-        let key_ptr = unsafe { *keys.add(index) };
-        let value_ptr = unsafe { *values.add(index) };
-
-        let key = require_cstr_at(key_ptr, "key", index)?;
-        let value = require_cstr_at(value_ptr, "value", index)?;
-        options.insert(key.to_string(), value.to_string());
-    }
-
-    Ok(options)
-}
 
 static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -131,7 +56,7 @@ pub unsafe extern "C" fn operator_construct(
     len: usize,
 ) -> OpendalIntPtrResult {
     match unsafe { operator_construct_inner(scheme, keys, values, len) } {
-        Ok(op) => ok_ptr_result(op),
+        Ok(op) => OpendalIntPtrResult::ok(op),
         Err(error) => OpendalIntPtrResult::from_error(error),
     }
 }
@@ -144,7 +69,7 @@ unsafe fn operator_construct_inner(
 ) -> Result<*mut c_void, OpenDALError> {
     let scheme = require_cstr(scheme, "scheme")?;
     let options = unsafe { collect_options(keys, values, len) }?;
-    let op = opendal::Operator::via_iter(scheme, options).map_err(from_opendal_error)?;
+    let op = opendal::Operator::via_iter(scheme, options).map_err(OpenDALError::from_opendal_error)?;
     Ok(Box::into_raw(Box::new(op)) as *mut c_void)
 }
 
@@ -179,7 +104,7 @@ pub unsafe extern "C" fn operator_write(
     len: usize,
 ) -> OpendalResult {
     match unsafe { operator_write_inner(op, path, data, len) } {
-        Ok(()) => ok_result(),
+        Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
 }
@@ -203,7 +128,7 @@ unsafe fn operator_write_inner(
     RUNTIME
         .block_on(op.write(path, payload))
         .map(|_| ())
-        .map_err(from_opendal_error)
+        .map_err(OpenDALError::from_opendal_error)
 }
 
 /// Read all bytes from `path` synchronously.
@@ -219,7 +144,7 @@ pub unsafe extern "C" fn operator_read(
     path: *const c_char,
 ) -> OpendalByteBufferResult {
     match unsafe { operator_read_inner(op, path) } {
-        Ok(value) => ok_buffer_result(value),
+        Ok(value) => OpendalByteBufferResult::ok(value),
         Err(error) => OpendalByteBufferResult::from_error(error),
     }
 }
@@ -233,7 +158,7 @@ unsafe fn operator_read_inner(
     let value = RUNTIME
         .block_on(op.read(path))
         .map(|v| v.to_vec())
-        .map_err(from_opendal_error)?;
+        .map_err(OpenDALError::from_opendal_error)?;
 
     Ok(ByteBuffer::from_vec(value))
 }
@@ -260,7 +185,7 @@ pub unsafe extern "C" fn operator_write_async(
     context: *mut c_void,
 ) -> OpendalResult {
     match unsafe { operator_write_async_inner(op, path, data, len, callback, context) } {
-        Ok(()) => ok_result(),
+        Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
 }
@@ -291,13 +216,13 @@ unsafe fn operator_write_async_inner(
             .write(&path, payload)
             .await
             .map(|_| ())
-            .map_err(from_opendal_error);
+            .map_err(OpenDALError::from_opendal_error);
 
         unsafe {
             callback(
                 context as *mut c_void,
                 match result {
-                    Ok(()) => ok_result(),
+                    Ok(()) => OpendalResult::ok(),
                     Err(error) => OpendalResult::from_error(error),
                 },
             );
@@ -327,7 +252,7 @@ pub unsafe extern "C" fn operator_read_async(
     context: *mut c_void,
 ) -> OpendalResult {
     match unsafe { operator_read_async_inner(op, path, callback, context) } {
-        Ok(()) => ok_result(),
+        Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
 }
@@ -349,13 +274,13 @@ unsafe fn operator_read_async_inner(
             .read(&path)
             .await
             .map(|v| ByteBuffer::from_vec(v.to_vec()))
-            .map_err(from_opendal_error);
+            .map_err(OpenDALError::from_opendal_error);
 
         unsafe {
             callback(
                 context as *mut c_void,
                 match result {
-                    Ok(value) => ok_buffer_result(value),
+                    Ok(value) => OpendalByteBufferResult::ok(value),
                     Err(error) => OpendalByteBufferResult::from_error(error),
                 },
             );

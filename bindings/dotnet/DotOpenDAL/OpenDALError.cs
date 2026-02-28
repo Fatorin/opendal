@@ -64,7 +64,7 @@ public static class OpenDALErrorExtension
             return;
         }
 
-        NativeMethods.message_free(error.Message);
+        NativeMethods.string_ptr_free(error.Message);
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ public static class OpenDALErrorExtension
         }
         finally
         {
-            NativeMethods.message_free(error.Message);
+            NativeMethods.string_ptr_free(error.Message);
         }
     }
 }

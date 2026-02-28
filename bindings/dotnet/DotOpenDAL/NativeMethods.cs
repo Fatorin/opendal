@@ -64,9 +64,9 @@ internal partial class NativeMethods
         delegate* unmanaged[Cdecl]<IntPtr, OpenDALByteBufferResult, void> callback,
         IntPtr context);
 
-    [LibraryImport(__DllName, EntryPoint = "message_free")]
+    [LibraryImport(__DllName, EntryPoint = "string_ptr_free")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    internal static partial void message_free(IntPtr message);
+    internal static partial void string_ptr_free(IntPtr message);
 
     [LibraryImport(__DllName, EntryPoint = "buffer_free")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
