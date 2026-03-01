@@ -76,7 +76,7 @@ public static class OpenDALErrorExtension
     {
         try
         {
-            return Utilities.DecodeUtf8Message(error.Message);
+            return Utilities.ReadUtf8(error.Message);
         }
         finally
         {

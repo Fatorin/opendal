@@ -23,3 +23,5 @@ mod utils;
 mod operator;
 mod byte_buffer;
 mod executor;
+mod options;
+mod metadata;

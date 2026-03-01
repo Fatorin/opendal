@@ -29,7 +29,7 @@ public static class Utilities
 	/// </summary>
 	/// <param name="message">Pointer to an unmanaged UTF-8 message buffer.</param>
 	/// <returns>The decoded message, or an empty string when the pointer is null or decoding returns null.</returns>
-	public static string DecodeUtf8Message(IntPtr message)
+	public static string ReadUtf8(IntPtr message)
 	{
 		if (message == IntPtr.Zero)
 		{

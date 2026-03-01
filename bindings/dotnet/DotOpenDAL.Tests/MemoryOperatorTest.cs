@@ -279,4 +279,139 @@ public class MemoryOperatorTest
         var read = await op.ReadAsync("healthy");
         Assert.Equal("healthy", System.Text.Encoding.UTF8.GetString(read));
     }
+
+    [Fact]
+    public void Read_WithOptions_OffsetAndLength_ReturnsRequestedRange()
+    {
+        using var op = new Operator("memory");
+        var content = System.Text.Encoding.UTF8.GetBytes("abcdef");
+        op.Write("read-range", content);
+
+        var result = op.Read("read-range", new ReadOptions
+        {
+            Offset = 2,
+            Length = 3,
+        });
+
+        Assert.Equal("cde", System.Text.Encoding.UTF8.GetString(result));
+    }
+
+    [Fact]
+    public async Task ReadAsync_WithOptions_OffsetAndLength_ReturnsRequestedRange()
+    {
+        using var op = new Operator("memory");
+        var content = System.Text.Encoding.UTF8.GetBytes("abcdef");
+        await op.WriteAsync("read-range-async", content);
+
+        var result = await op.ReadAsync("read-range-async", new ReadOptions
+        {
+            Offset = 1,
+            Length = 4,
+        });
+
+        Assert.Equal("bcde", System.Text.Encoding.UTF8.GetString(result));
+    }
+
+    [Fact]
+    public void Write_WithOptions_Append_AppendsWhenSupported()
+    {
+        using var op = new Operator("memory");
+        if (!op.Info.FullCapability.WriteCanAppend)
+        {
+            return;
+        }
+
+        op.Write("append-sync", System.Text.Encoding.UTF8.GetBytes("a"));
+        op.Write("append-sync", System.Text.Encoding.UTF8.GetBytes("b"), new WriteOptions
+        {
+            Append = true,
+        });
+
+        var result = System.Text.Encoding.UTF8.GetString(op.Read("append-sync"));
+        Assert.Equal("ab", result);
+    }
+
+    [Fact]
+    public async Task WriteAsync_WithOptions_Append_AppendsWhenSupported()
+    {
+        using var op = new Operator("memory");
+        if (!op.Info.FullCapability.WriteCanAppend)
+        {
+            return;
+        }
+
+        await op.WriteAsync("append-async", System.Text.Encoding.UTF8.GetBytes("x"));
+        await op.WriteAsync("append-async", System.Text.Encoding.UTF8.GetBytes("y"), new WriteOptions
+        {
+            Append = true,
+        });
+
+        var result = System.Text.Encoding.UTF8.GetString(await op.ReadAsync("append-async"));
+        Assert.Equal("xy", result);
+    }
+
+    [Fact]
+    public void Write_WithOptions_IfNotExists_FailsOnExistingPathWhenSupported()
+    {
+        using var op = new Operator("memory");
+        if (!op.Info.FullCapability.WriteWithIfNotExists)
+        {
+            return;
+        }
+
+        op.Write("if-not-exists", System.Text.Encoding.UTF8.GetBytes("first"));
+        var ex = Assert.Throws<OpenDALException>(() =>
+            op.Write("if-not-exists", System.Text.Encoding.UTF8.GetBytes("second"), new WriteOptions
+            {
+                IfNotExists = true,
+            }));
+
+        Assert.Equal(ErrorCode.ConditionNotMatch, ex.Code);
+    }
+
+    [Fact]
+    public void Stat_WithOptions_ReturnsMetadata()
+    {
+        using var op = new Operator("memory");
+        var payload = System.Text.Encoding.UTF8.GetBytes("metadata");
+        op.Write("stat-sync", payload);
+
+        var metadata = op.Stat("stat-sync");
+
+        Assert.True(metadata.IsFile);
+        Assert.Equal((ulong)payload.Length, metadata.ContentLength);
+    }
+
+    [Fact]
+    public async Task StatAsync_WithOptions_ReturnsMetadata()
+    {
+        using var op = new Operator("memory");
+        var payload = System.Text.Encoding.UTF8.GetBytes("metadata-async");
+        await op.WriteAsync("stat-async", payload);
+
+        var metadata = await op.StatAsync("stat-async");
+
+        Assert.True(metadata.IsFile);
+        Assert.Equal((ulong)payload.Length, metadata.ContentLength);
+    }
+
+    [Fact]
+    public void Stat_WithOptions_IfModifiedSince_FailsWhenConditionNotMatched()
+    {
+        using var op = new Operator("memory");
+        if (!op.Info.FullCapability.StatWithIfModifiedSince)
+        {
+            return;
+        }
+
+        op.Write("stat-condition", System.Text.Encoding.UTF8.GetBytes("value"));
+
+        var ex = Assert.Throws<OpenDALException>(() =>
+            op.Stat("stat-condition", new StatOptions
+            {
+                IfModifiedSince = DateTimeOffset.UtcNow.AddDays(1),
+            }));
+
+        Assert.Equal(ErrorCode.ConditionNotMatch, ex.Code);
+    }
 }

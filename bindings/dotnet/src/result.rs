@@ -19,6 +19,7 @@ use std::ffi::c_void;
 
 use crate::byte_buffer::ByteBuffer;
 use crate::error::OpenDALError;
+use crate::metadata::OpendalMetadata;
 
 #[repr(C)]
 /// Result for operations that only report success or failure.
@@ -41,6 +42,15 @@ pub struct OpendalIntPtrResult {
 pub struct OpendalByteBufferResult {
     /// Buffer payload on success.
     pub buffer: ByteBuffer,
+    /// Error information for the operation.
+    pub error: OpenDALError,
+}
+
+#[repr(C)]
+/// Result for operations returning metadata.
+pub struct OpendalMetadataResult {
+    /// Metadata payload on success.
+    pub ptr: *mut OpendalMetadata,
     /// Error information for the operation.
     pub error: OpenDALError,
 }
@@ -95,4 +105,10 @@ define_result!(
     OpendalByteBufferResult,
     field = buffer: ByteBuffer,
     error_value = ByteBuffer::empty()
+);
+
+define_result!(
+    OpendalMetadataResult,
+    field = ptr: *mut OpendalMetadata,
+    error_value = std::ptr::null_mut()
 );

@@ -69,6 +69,54 @@ internal struct OpenDALByteBufferResult
 
 [StructLayout(LayoutKind.Sequential)]
 /// <summary>
+/// Result wrapper for operations that return metadata payload.
+/// </summary>
+internal struct OpenDALMetadataResult
+{
+    /// <summary>
+    /// Metadata payload pointer on success.
+    /// </summary>
+    public IntPtr Ptr;
+
+    /// <summary>
+    /// Error details for the operation.
+    /// </summary>
+    public OpenDALError Error;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native payload for metadata returned by stat operations.
+/// </summary>
+internal struct OpenDALMetadata
+{
+    public int Mode;
+
+    public ulong ContentLength;
+
+    public IntPtr ContentDisposition;
+
+    public IntPtr ContentMd5;
+
+    public IntPtr ContentType;
+
+    public IntPtr ContentEncoding;
+
+    public IntPtr CacheControl;
+
+    public IntPtr ETag;
+
+    public byte LastModifiedHasValue;
+
+    public long LastModifiedSecond;
+
+    public int LastModifiedNanosecond;
+
+    public IntPtr Version;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
 /// Native payload for operator metadata returned by <c>operator_info_get</c>.
 /// </summary>
 /// <remarks>

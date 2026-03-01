@@ -99,3 +99,19 @@ public sealed class ReadAsyncState : IAsyncState
     /// </summary>
     public CancellationTokenRegistration CancellationRegistration { get; set; }
 }
+
+/// <summary>
+/// State object for a pending asynchronous stat operation.
+/// </summary>
+public sealed class StatAsyncState : IAsyncState
+{
+    /// <summary>
+    /// Completion source that resolves with metadata when the native stat callback arrives.
+    /// </summary>
+    public TaskCompletionSource<Metadata> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Registration used to detach cancellation callbacks when the operation completes.
+    /// </summary>
+    public CancellationTokenRegistration CancellationRegistration { get; set; }
+}
