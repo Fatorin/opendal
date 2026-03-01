@@ -19,6 +19,8 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using DotOpenDAL.Layer;
+using DotOpenDAL.Layer.Abstractions;
 using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL;
@@ -29,6 +31,10 @@ namespace DotOpenDAL;
 public partial class Operator : SafeHandle
 {
     private unsafe delegate TResult NativeOptionsInvoker<TResult>(IntPtr* keys, IntPtr* values, nuint len);
+
+    private Operator() : base(IntPtr.Zero, true)
+    {
+    }
 
     /// <summary>
     /// Gets metadata of this operator.
@@ -152,6 +158,77 @@ public partial class Operator : SafeHandle
         config?.Scheme ?? throw new ArgumentNullException(nameof(config)),
         config.ToOptions())
     {
+    }
+
+    /// <summary>
+    /// Applies the specified layer and returns a new operator instance.
+    /// </summary>
+    /// <param name="layer">Layer to apply.</param>
+    /// <returns>A new operator with the layer applied.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="layer"/> is null.</exception>
+    /// <exception cref="ObjectDisposedException">The operator has been disposed.</exception>
+    /// <exception cref="OpenDALException">Native layer application fails.</exception>
+    public Operator WithLayer(ILayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        return layer.Apply(this);
+    }
+
+    /// <summary>
+    /// Applies retry behavior and returns a new operator instance.
+    /// </summary>
+    /// <param name="jitter">Whether to enable randomized retry jitter.</param>
+    /// <param name="factor">Retry delay growth factor.</param>
+    /// <param name="minDelay">Minimum retry delay. Defaults to 1 second.</param>
+    /// <param name="maxDelay">Maximum retry delay. Defaults to 60 seconds.</param>
+    /// <param name="maxTimes">Maximum retry attempts. Defaults to 3.</param>
+    /// <returns>A new operator with retry layer applied.</returns>
+    public Operator WithRetry(
+        bool jitter = false,
+        float factor = 2f,
+        TimeSpan? minDelay = null,
+        TimeSpan? maxDelay = null,
+        nuint maxTimes = 3)
+    {
+        var retry = new RetryLayer
+        {
+            Jitter = jitter,
+            Factor = factor,
+            MinDelay = minDelay ?? TimeSpan.FromSeconds(1),
+            MaxDelay = maxDelay ?? TimeSpan.FromSeconds(60),
+            MaxTimes = maxTimes,
+        };
+
+        return WithLayer(retry);
+    }
+
+    /// <summary>
+    /// Applies concurrent-limit behavior and returns a new operator instance.
+    /// </summary>
+    /// <param name="permits">Maximum concurrent permits. Must be greater than zero.</param>
+    /// <returns>A new operator with concurrent-limit layer applied.</returns>
+    public Operator WithConcurrentLimit(nuint permits)
+    {
+        var concurrentLimit = new ConcurrentLimitLayer(permits);
+        return WithLayer(concurrentLimit);
+    }
+
+    /// <summary>
+    /// Applies timeout behavior and returns a new operator instance.
+    /// </summary>
+    /// <param name="timeout">Timeout for non-IO operations. Defaults to 60 seconds.</param>
+    /// <param name="ioTimeout">Timeout for IO operations. Defaults to 10 seconds.</param>
+    /// <returns>A new operator with timeout layer applied.</returns>
+    public Operator WithTimeout(TimeSpan? timeout = null, TimeSpan? ioTimeout = null)
+    {
+        var timeoutLayer = new TimeoutLayer
+        {
+            Timeout = timeout ?? TimeSpan.FromSeconds(60),
+            IoTimeout = ioTimeout ?? TimeSpan.FromSeconds(10),
+        };
+
+        return WithLayer(timeoutLayer);
     }
 
     /// <summary>
@@ -938,6 +1015,28 @@ public partial class Operator : SafeHandle
     {
         NativeMethods.operator_free(handle);
         return true;
+    }
+
+    internal static Operator FromLayerResult(OpenDALPointerResult result)
+    {
+        if (result.Error.IsError)
+        {
+            throw new OpenDALException(result.Error);
+        }
+
+        if (result.Ptr == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Layer application returned null operator pointer");
+        }
+
+        return FromOwnedHandle(result.Ptr);
+    }
+
+    private static Operator FromOwnedHandle(IntPtr handle)
+    {
+        var op = new Operator();
+        op.SetHandle(handle);
+        return op;
     }
 
     private static IntPtr GetExecutorHandle(Executor? executor)

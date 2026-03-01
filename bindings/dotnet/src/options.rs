@@ -17,9 +17,12 @@
 
 use std::collections::HashMap;
 
-use opendal::raw::Timestamp;
-
-use crate::error::{ErrorCode, OpenDALError};
+use crate::error::OpenDALError;
+use crate::validators::prelude::{
+    parse_bool, parse_string, parse_timestamp, parse_u64, parse_usize,
+    validate_list_limit, validate_read_chunk, validate_read_concurrent, validate_read_gap,
+    validate_read_range_end, validate_write_chunk, validate_write_concurrent,
+};
 
 pub fn parse_read_options(
     values: &HashMap<String, String>,
@@ -29,16 +32,8 @@ pub fn parse_read_options(
     let offset = parse_u64(values, "offset")?.unwrap_or_default();
     let length = parse_u64(values, "length")?;
     if offset > 0 || length.is_some() {
-        options.range = match length {
-            Some(size) => {
-                let end = offset.checked_add(size).ok_or_else(|| {
-                    OpenDALError::from_error(
-                        ErrorCode::ConfigInvalid,
-                        "offset + length overflow in read options",
-                    )
-                })?;
-                (offset..end).into()
-            }
+        options.range = match validate_read_range_end(offset, length)? {
+            Some(end) => (offset..end).into(),
             None => (offset..).into(),
         };
     }
@@ -50,32 +45,17 @@ pub fn parse_read_options(
     options.if_unmodified_since = parse_timestamp(values, "if_unmodified_since")?;
 
     if let Some(concurrent) = parse_usize(values, "concurrent")? {
-        if concurrent == 0 {
-            return Err(OpenDALError::from_error(
-                ErrorCode::ConfigInvalid,
-                "read concurrent must be > 0",
-            ));
-        }
+        validate_read_concurrent(concurrent)?;
         options.concurrent = concurrent;
     }
 
     if let Some(chunk) = parse_usize(values, "chunk")? {
-        if chunk == 0 {
-            return Err(OpenDALError::from_error(
-                ErrorCode::ConfigInvalid,
-                "read chunk must be > 0",
-            ));
-        }
+        validate_read_chunk(chunk)?;
         options.chunk = Some(chunk);
     }
 
     if let Some(gap) = parse_usize(values, "gap")? {
-        if gap == 0 {
-            return Err(OpenDALError::from_error(
-                ErrorCode::ConfigInvalid,
-                "read gap must be > 0",
-            ));
-        }
+        validate_read_gap(gap)?;
         options.gap = Some(gap);
     }
 
@@ -107,22 +87,12 @@ pub fn parse_write_options(
     }
 
     if let Some(concurrent) = parse_usize(values, "concurrent")? {
-        if concurrent == 0 {
-            return Err(OpenDALError::from_error(
-                ErrorCode::ConfigInvalid,
-                "write concurrent must be > 0",
-            ));
-        }
+        validate_write_concurrent(concurrent)?;
         options.concurrent = concurrent;
     }
 
     if let Some(chunk) = parse_usize(values, "chunk")? {
-        if chunk == 0 {
-            return Err(OpenDALError::from_error(
-                ErrorCode::ConfigInvalid,
-                "write chunk must be > 0",
-            ));
-        }
+        validate_write_chunk(chunk)?;
         options.chunk = Some(chunk);
     }
 
@@ -166,12 +136,7 @@ pub fn parse_list_options(
     }
 
     if let Some(limit) = parse_usize(values, "limit")? {
-        if limit == 0 {
-            return Err(OpenDALError::from_error(
-                ErrorCode::ConfigInvalid,
-                "list limit must be > 0",
-            ));
-        }
+        validate_list_limit(limit)?;
         options.limit = Some(limit);
     }
 
@@ -186,67 +151,4 @@ pub fn parse_list_options(
     }
 
     Ok(options)
-}
-
-fn parse_string(values: &HashMap<String, String>, key: &str) -> Option<String> {
-    values.get(key).cloned()
-}
-
-fn parse_bool(values: &HashMap<String, String>, key: &str) -> Result<Option<bool>, OpenDALError> {
-    let Some(raw) = values.get(key) else {
-        return Ok(None);
-    };
-
-    match raw.to_ascii_lowercase().as_str() {
-        "true" | "1" => Ok(Some(true)),
-        "false" | "0" => Ok(Some(false)),
-        _ => Err(OpenDALError::from_error(
-            ErrorCode::ConfigInvalid,
-            format!("invalid boolean value for {key}: {raw}"),
-        )),
-    }
-}
-
-fn parse_usize(values: &HashMap<String, String>, key: &str) -> Result<Option<usize>, OpenDALError> {
-    let Some(raw) = values.get(key) else {
-        return Ok(None);
-    };
-
-    raw.parse::<usize>().map(Some).map_err(|err| {
-        OpenDALError::from_error(
-            ErrorCode::ConfigInvalid,
-            format!("invalid usize value for {key}: {raw}, {err}"),
-        )
-    })
-}
-
-fn parse_u64(values: &HashMap<String, String>, key: &str) -> Result<Option<u64>, OpenDALError> {
-    let Some(raw) = values.get(key) else {
-        return Ok(None);
-    };
-
-    raw.parse::<u64>().map(Some).map_err(|err| {
-        OpenDALError::from_error(
-            ErrorCode::ConfigInvalid,
-            format!("invalid u64 value for {key}: {raw}, {err}"),
-        )
-    })
-}
-
-fn parse_timestamp(
-    values: &HashMap<String, String>,
-    key: &str,
-) -> Result<Option<Timestamp>, OpenDALError> {
-    let Some(raw) = values.get(key) else {
-        return Ok(None);
-    };
-
-    let millis = raw.parse::<i64>().map_err(|err| {
-        OpenDALError::from_error(
-            ErrorCode::ConfigInvalid,
-            format!("invalid timestamp milliseconds for {key}: {raw}, {err}"),
-        )
-    })?;
-
-    Timestamp::from_millisecond(millis).map(Some).map_err(OpenDALError::from_opendal_error)
 }

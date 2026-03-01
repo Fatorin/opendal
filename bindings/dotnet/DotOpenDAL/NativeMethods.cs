@@ -50,6 +50,33 @@ internal partial class NativeMethods
 
     #endregion
 
+    #region Layer
+
+    [LibraryImport(__DllName, EntryPoint = "operator_layer_retry")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALPointerResult operator_layer_retry(
+        Operator op,
+        [MarshalAs(UnmanagedType.I1)] bool jitter,
+        float factor,
+        ulong minDelayNanos,
+        ulong maxDelayNanos,
+        nuint maxTimes);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_layer_concurrent_limit")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALPointerResult operator_layer_concurrent_limit(
+        Operator op,
+        nuint permits);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_layer_timeout")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALPointerResult operator_layer_timeout(
+        Operator op,
+        ulong timeoutNanos,
+        ulong ioTimeoutNanos);
+
+    #endregion
+
     #region IO Operations
 
     #region Write

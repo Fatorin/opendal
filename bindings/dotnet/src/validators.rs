@@ -15,15 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-mod error;
-mod result;
-mod capability;
-mod operator_info;
-mod utils;
-mod operator;
-mod byte_buffer;
-mod executor;
-mod options;
-mod metadata;
-mod entry;
-mod validators;
+pub mod layer;
+pub mod options;
+
+pub(crate) mod prelude {
+    pub(crate) use super::layer::{
+        validate_concurrent_limit_options, validate_retry_options, validate_timeout_options,
+    };
+    pub(crate) use super::options::{
+        parse_bool, parse_string, parse_timestamp, parse_u64, parse_usize, validate_list_limit,
+        validate_read_chunk, validate_read_concurrent, validate_read_gap, validate_read_range_end,
+        validate_write_chunk, validate_write_concurrent,
+    };
+}

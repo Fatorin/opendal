@@ -30,10 +30,14 @@ use crate::{
         collect_options, into_operator_info, require_callback, require_cstr, require_data_ptr,
         require_operator,
     },
+    validators::prelude::{
+        validate_concurrent_limit_options, validate_retry_options, validate_timeout_options,
+    },
 };
 
 use std::ffi::c_void;
 use std::os::raw::c_char;
+use std::time::Duration;
 
 type WriteCallback = unsafe extern "C" fn(context: *mut c_void, result: OpendalResult);
 type ReadCallback = unsafe extern "C" fn(context: *mut c_void, result: OpendalByteBufferResult);
@@ -141,6 +145,116 @@ pub unsafe extern "C" fn operator_info_free(info: *mut OpendalOperatorInfo) {
             drop(std::ffi::CString::from_raw(info.name));
         }
     }
+}
+
+/// Create a new operator layered with retry behavior.
+///
+/// The current operator is not modified. Returned pointer must be released with
+/// `operator_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_layer_retry(
+    op: *const opendal::Operator,
+    jitter: bool,
+    factor: f32,
+    min_delay_nanos: u64,
+    max_delay_nanos: u64,
+    max_times: usize,
+) -> OpendalPointerResult {
+    match unsafe {
+        operator_layer_retry_inner(op, jitter, factor, min_delay_nanos, max_delay_nanos, max_times)
+    } {
+        Ok(value) => OpendalPointerResult::ok(value),
+        Err(error) => OpendalPointerResult::from_error(error),
+    }
+}
+
+unsafe fn operator_layer_retry_inner(
+    op: *const opendal::Operator,
+    jitter: bool,
+    factor: f32,
+    min_delay_nanos: u64,
+    max_delay_nanos: u64,
+    max_times: usize,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    validate_retry_options(factor, min_delay_nanos, max_delay_nanos)?;
+
+    let mut retry = opendal::layers::RetryLayer::new();
+    retry = retry.with_factor(factor);
+    retry = retry.with_min_delay(Duration::from_nanos(min_delay_nanos));
+    retry = retry.with_max_delay(Duration::from_nanos(max_delay_nanos));
+    retry = retry.with_max_times(max_times);
+    if jitter {
+        retry = retry.with_jitter();
+    }
+
+    Ok(Box::into_raw(Box::new(op.clone().layer(retry))) as *mut c_void)
+}
+
+/// Create a new operator layered with timeout behavior.
+///
+/// The current operator is not modified. Returned pointer must be released with
+/// `operator_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_layer_timeout(
+    op: *const opendal::Operator,
+    timeout_nanos: u64,
+    io_timeout_nanos: u64,
+) -> OpendalPointerResult {
+    match unsafe { operator_layer_timeout_inner(op, timeout_nanos, io_timeout_nanos) } {
+        Ok(value) => OpendalPointerResult::ok(value),
+        Err(error) => OpendalPointerResult::from_error(error),
+    }
+}
+
+unsafe fn operator_layer_timeout_inner(
+    op: *const opendal::Operator,
+    timeout_nanos: u64,
+    io_timeout_nanos: u64,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    validate_timeout_options(timeout_nanos, io_timeout_nanos)?;
+
+    let timeout = opendal::layers::TimeoutLayer::new()
+        .with_timeout(Duration::from_nanos(timeout_nanos))
+        .with_io_timeout(Duration::from_nanos(io_timeout_nanos));
+
+    Ok(Box::into_raw(Box::new(op.clone().layer(timeout))) as *mut c_void)
+}
+
+/// Create a new operator layered with concurrent-limit behavior.
+///
+/// The current operator is not modified. Returned pointer must be released with
+/// `operator_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_layer_concurrent_limit(
+    op: *const opendal::Operator,
+    permits: usize,
+) -> OpendalPointerResult {
+    match unsafe { operator_layer_concurrent_limit_inner(op, permits) } {
+        Ok(value) => OpendalPointerResult::ok(value),
+        Err(error) => OpendalPointerResult::from_error(error),
+    }
+}
+
+unsafe fn operator_layer_concurrent_limit_inner(
+    op: *const opendal::Operator,
+    permits: usize,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    validate_concurrent_limit_options(permits)?;
+
+    let concurrent_limit = opendal::layers::ConcurrentLimitLayer::new(permits);
+    Ok(Box::into_raw(Box::new(op.clone().layer(concurrent_limit))) as *mut c_void)
 }
 
 /// Write bytes to `path` synchronously.
