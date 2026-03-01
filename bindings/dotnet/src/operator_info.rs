@@ -15,11 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-mod error;
-mod result;
-mod capability;
-mod operator_info;
-mod utils;
-mod operator;
-mod byte_buffer;
-mod executor;
+use std::os::raw::c_char;
+
+use crate::capability::Capability;
+
+#[repr(C)]
+/// Operator info payload exposed to the .NET binding.
+pub struct OpendalOperatorInfo {
+    pub scheme: *mut c_char,
+    pub root: *mut c_char,
+    pub name: *mut c_char,
+    pub full_capability: Capability,
+    pub native_capability: Capability,
+}

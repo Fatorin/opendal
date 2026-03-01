@@ -17,10 +17,32 @@
  * under the License.
  */
 
+using DotOpenDAL.ServiceConfig;
+
 namespace DotOpenDAL.Tests;
 
 public class MemoryOperatorTest
 {
+    [Fact]
+    public void Info_MemoryConfig_ReturnsSchemeRootAndName()
+    {
+        var config = new MemoryServiceConfig
+        {
+            Root = "/tmp",
+        };
+
+        using var op = new Operator(config);
+        var info = op.Info;
+
+        Assert.Equal("memory", info.Scheme);
+        Assert.Equal("/tmp", info.Root.TrimEnd('/'));
+        Assert.False(string.IsNullOrEmpty(info.Name));
+        Assert.True(info.FullCapability.Read);
+        Assert.True(info.FullCapability.Write);
+        Assert.True(info.NativeCapability.Read);
+        Assert.True(info.NativeCapability.Write);
+    }
+
     [Fact]
     public async Task ReadWrite_DisposeRace_DoesNotCrashProcess()
     {

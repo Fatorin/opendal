@@ -66,3 +66,39 @@ internal struct OpenDALByteBufferResult
     /// </summary>
     public OpenDALError Error;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native payload for operator metadata returned by <c>operator_info_get</c>.
+/// </summary>
+/// <remarks>
+/// String fields are unmanaged UTF-8 pointers allocated by native code and are
+/// released together via <c>operator_info_free</c>.
+/// </remarks>
+internal struct OpenDALOperatorInfo
+{
+    /// <summary>
+    /// Backend scheme name pointer.
+    /// </summary>
+    public IntPtr Scheme;
+
+    /// <summary>
+    /// Backend root path pointer.
+    /// </summary>
+    public IntPtr Root;
+
+    /// <summary>
+    /// Backend display name pointer.
+    /// </summary>
+    public IntPtr Name;
+
+    /// <summary>
+    /// Full capability payload.
+    /// </summary>
+    public Capability FullCapability;
+
+    /// <summary>
+    /// Native capability payload.
+    /// </summary>
+    public Capability NativeCapability;
+}

@@ -66,6 +66,14 @@ internal partial class NativeMethods
         delegate* unmanaged[Cdecl]<IntPtr, OpenDALByteBufferResult, void> callback,
         IntPtr context);
 
+    [LibraryImport(__DllName, EntryPoint = "operator_info_get")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALIntPtrResult operator_info_get(Operator op);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_info_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void operator_info_free(IntPtr info);
+
     [LibraryImport(__DllName, EntryPoint = "executor_create")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial OpenDALIntPtrResult executor_create(nuint threads);

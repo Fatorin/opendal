@@ -18,7 +18,9 @@
 use std::collections::HashMap;
 use std::os::raw::c_char;
 
+use crate::capability::Capability;
 use crate::error::{ErrorCode, OpenDALError};
+use crate::operator_info::OpendalOperatorInfo;
 
 /// Convert a C string pointer into `&str`.
 ///
@@ -163,6 +165,17 @@ pub fn into_string_ptr(message: impl Into<String>) -> *mut c_char {
             .into_raw(),
     }
 }
+
+pub fn into_operator_info(info: opendal::OperatorInfo) -> OpendalOperatorInfo {
+    OpendalOperatorInfo {
+        scheme: into_string_ptr(info.scheme().to_string()),
+        root: into_string_ptr(info.root()),
+        name: into_string_ptr(info.name()),
+        full_capability: Capability::new(info.full_capability()),
+        native_capability: Capability::new(info.native_capability()),
+    }
+}
+
 
 /// # Safety
 ///

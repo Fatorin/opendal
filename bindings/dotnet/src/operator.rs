@@ -19,9 +19,11 @@ use crate::{
     byte_buffer::ByteBuffer,
     executor::executor_or_default,
     error::OpenDALError,
+    operator_info::OpendalOperatorInfo,
     result::{OpendalByteBufferResult, OpendalIntPtrResult, OpendalResult},
     utils::{
-        collect_options, require_callback, require_cstr, require_data_ptr, require_operator,
+        collect_options, into_operator_info, require_callback, require_cstr, require_data_ptr,
+        require_operator,
     },
 };
 
@@ -80,6 +82,57 @@ pub unsafe extern "C" fn operator_free(op: *mut opendal::Operator) {
 
     unsafe {
         drop(Box::from_raw(op));
+    }
+}
+
+/// Get operator info payload.
+///
+/// On success, returned string fields in payload must be released by
+/// `string_ptr_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_info_get(
+    op: *const opendal::Operator,
+) -> OpendalIntPtrResult {
+    match unsafe { operator_info_get_inner(op) } {
+        Ok(value) => OpendalIntPtrResult::ok(value),
+        Err(error) => OpendalIntPtrResult::from_error(error),
+    }
+}
+
+unsafe fn operator_info_get_inner(
+    op: *const opendal::Operator,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    let info = into_operator_info(op.info());
+    Ok(Box::into_raw(Box::new(info)) as *mut c_void)
+}
+
+/// Release an operator info payload created by `operator_info_get`.
+/// # Safety
+///
+/// - `info` must be either null or a pointer returned by `operator_info_get`.
+/// - The pointer must not be used after this call.
+/// - This function must be called at most once for the same pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_info_free(info: *mut OpendalOperatorInfo) {
+    if info.is_null() {
+        return;
+    }
+
+    unsafe {
+        let info = Box::from_raw(info);
+        if !info.scheme.is_null() {
+            drop(std::ffi::CString::from_raw(info.scheme));
+        }
+        if !info.root.is_null() {
+            drop(std::ffi::CString::from_raw(info.root));
+        }
+        if !info.name.is_null() {
+            drop(std::ffi::CString::from_raw(info.name));
+        }
     }
 }
 

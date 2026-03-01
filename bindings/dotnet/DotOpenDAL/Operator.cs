@@ -19,6 +19,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL;
 
@@ -27,6 +28,45 @@ namespace DotOpenDAL;
 /// </summary>
 public partial class Operator : SafeHandle
 {
+    /// <summary>
+    /// Gets metadata of this operator.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">The operator has been disposed.</exception>
+    /// <exception cref="OpenDALException">Native operator info retrieval fails.</exception>
+    public OperatorInfo Info
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(IsInvalid, this);
+            var result = NativeMethods.operator_info_get(this);
+            if (result.Error.IsError)
+            {
+                throw new OpenDALException(result.Error);
+            }
+
+            if (result.Ptr == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("operator_info_get returned null pointer");
+            }
+
+            var payload = Marshal.PtrToStructure<OpenDALOperatorInfo>(result.Ptr);
+
+            try
+            {
+                return new OperatorInfo(
+                    ReadUtf8(payload.Scheme),
+                    ReadUtf8(payload.Root),
+                    ReadUtf8(payload.Name),
+                    payload.FullCapability,
+                    payload.NativeCapability);
+            }
+            finally
+            {
+                NativeMethods.operator_info_free(result.Ptr);
+            }
+        }
+    }
+
     /// <summary>
     /// Gets the underlying native operator pointer.
     /// </summary>
@@ -98,6 +138,18 @@ public partial class Operator : SafeHandle
         }
 
         SetHandle(result.Ptr);
+    }
+
+    /// <summary>
+    /// Creates an operator from a typed service configuration.
+    /// </summary>
+    /// <param name="config">Typed service configuration.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="config"/> is null.</exception>
+    /// <exception cref="OpenDALException">Native operator construction fails.</exception>
+    public Operator(IServiceConfig config) : this(
+        config?.Scheme ?? throw new ArgumentNullException(nameof(config)),
+        config.ToOptions())
+    {
     }
 
     /// <summary>
@@ -340,6 +392,17 @@ public partial class Operator : SafeHandle
         ObjectDisposedException.ThrowIf(executor.IsClosed || executor.IsInvalid, executor);
         return executor.DangerousGetHandle();
     }
+
+    private static string ReadUtf8(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero)
+        {
+            return string.Empty;
+        }
+
+        return Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+    }
+
 
     /// <summary>
     /// Native callback invoked when an asynchronous write operation finishes.

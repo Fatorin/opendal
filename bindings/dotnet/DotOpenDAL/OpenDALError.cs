@@ -76,18 +76,14 @@ public static class OpenDALErrorExtension
     {
         try
         {
-            if (error.Message == IntPtr.Zero)
-            {
-                return string.Empty;
-            }
-
-            return Marshal.PtrToStringUTF8(error.Message) ?? string.Empty;
+            return Utilities.DecodeUtf8Message(error.Message);
         }
         finally
         {
             NativeMethods.string_ptr_free(error.Message);
         }
     }
+
 }
 
 /// <summary>
