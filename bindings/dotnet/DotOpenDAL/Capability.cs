@@ -26,7 +26,7 @@ namespace DotOpenDAL;
 /// </summary>
 /// <remarks>
 /// This model maps from native capability payload returned by OpenDAL.
-/// For write multi size fields, nullable values preserve native <c>Option</c> semantics.
+/// For write multi size fields, nullable values are represented by a native sentinel value.
 /// </remarks>
 [StructLayout(LayoutKind.Sequential)]
 public struct Capability
@@ -64,11 +64,8 @@ public struct Capability
     [MarshalAs(UnmanagedType.U1)] internal byte writeWithIfNotExists;
     [MarshalAs(UnmanagedType.U1)] internal byte writeWithUserMetadata;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte hasWriteMultiMaxSize;
     internal nuint writeMultiMaxSize;
-    [MarshalAs(UnmanagedType.U1)] internal byte hasWriteMultiMinSize;
     internal nuint writeMultiMinSize;
-    [MarshalAs(UnmanagedType.U1)] internal byte hasWriteTotalMaxSize;
     internal nuint writeTotalMaxSize;
 
     [MarshalAs(UnmanagedType.U1)] internal byte createDir;
@@ -249,17 +246,17 @@ public struct Capability
     /// <summary>
     /// write_multi_max_size is the max size that services support in write_multi.
     /// </summary>
-    public ulong? WriteMultiMaxSize => hasWriteMultiMaxSize == 0 ? null : writeMultiMaxSize;
+    public ulong? WriteMultiMaxSize => writeMultiMaxSize == ulong.MinValue ? null : writeMultiMaxSize;
 
     /// <summary>
     /// write_multi_min_size is the min size that services support in write_multi.
     /// </summary>
-    public ulong? WriteMultiMinSize => hasWriteMultiMinSize == 0 ? null : writeMultiMinSize;
+    public ulong? WriteMultiMinSize => writeMultiMinSize == ulong.MinValue ? null : writeMultiMinSize;
 
     /// <summary>
     /// write_total_max_size is the max total size that services support in write.
     /// </summary>
-    public ulong? WriteTotalMaxSize => hasWriteTotalMaxSize == 0 ? null : writeTotalMaxSize;
+    public ulong? WriteTotalMaxSize => writeTotalMaxSize == ulong.MinValue ? null : writeTotalMaxSize;
 
     /// <summary>
     /// If operator supports create dir.
@@ -284,7 +281,7 @@ public struct Capability
     /// <summary>
     /// delete_max_size is the max size that services support in delete.
     /// </summary>
-    public ulong? DeleteMaxSize => deleteMaxSize == 0 ? null : deleteMaxSize;
+    public ulong? DeleteMaxSize => deleteMaxSize == ulong.MinValue ? null : deleteMaxSize;
 
     /// <summary>
     /// If operator supports copy.
