@@ -156,6 +156,38 @@ pub fn parse_stat_options(
     })
 }
 
+pub fn parse_list_options(
+    values: &HashMap<String, String>,
+) -> Result<opendal::options::ListOptions, OpenDALError> {
+    let mut options = opendal::options::ListOptions::default();
+
+    if let Some(recursive) = parse_bool(values, "recursive")? {
+        options.recursive = recursive;
+    }
+
+    if let Some(limit) = parse_usize(values, "limit")? {
+        if limit == 0 {
+            return Err(OpenDALError::from_error(
+                ErrorCode::ConfigInvalid,
+                "list limit must be > 0",
+            ));
+        }
+        options.limit = Some(limit);
+    }
+
+    options.start_after = parse_string(values, "start_after");
+
+    if let Some(versions) = parse_bool(values, "versions")? {
+        options.versions = versions;
+    }
+
+    if let Some(deleted) = parse_bool(values, "deleted")? {
+        options.deleted = deleted;
+    }
+
+    Ok(options)
+}
+
 fn parse_string(values: &HashMap<String, String>, key: &str) -> Option<String> {
     values.get(key).cloned()
 }

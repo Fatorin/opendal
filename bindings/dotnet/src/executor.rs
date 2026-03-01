@@ -24,7 +24,7 @@ use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::thread::available_parallelism;
 
 use crate::error::OpenDALError;
-use crate::result::OpendalIntPtrResult;
+use crate::result::OpendalPointerResult;
 use crate::utils::config_invalid_error;
 
 static DEFAULT_EXECUTOR: OnceLock<Arc<Executor>> = OnceLock::new();
@@ -125,21 +125,21 @@ pub unsafe fn executor_or_default(executor: *const c_void) -> Result<Arc<Executo
     /// On success, returns a pointer-like handle that must be released by
     /// `executor_free`.
 #[unsafe(no_mangle)]
-pub extern "C" fn executor_create(threads: usize) -> OpendalIntPtrResult {
+pub extern "C" fn executor_create(threads: usize) -> OpendalPointerResult {
     match Executor::new(threads) {
         Ok(executor) => {
             let id = NEXT_EXECUTOR_ID.fetch_add(1, Ordering::Relaxed);
             match EXECUTOR_REGISTRY.lock() {
                 Ok(mut registry) => {
                     registry.insert(id, Arc::new(executor));
-                    OpendalIntPtrResult::ok(id as *mut c_void)
+                    OpendalPointerResult::ok(id as *mut c_void)
                 }
                 Err(_) => {
-                    OpendalIntPtrResult::from_error(config_invalid_error("executor registry is poisoned"))
+                    OpendalPointerResult::from_error(config_invalid_error("executor registry is poisoned"))
                 }
             }
         }
-        Err(error) => OpendalIntPtrResult::from_error(error),
+        Err(error) => OpendalPointerResult::from_error(error),
     }
 }
 

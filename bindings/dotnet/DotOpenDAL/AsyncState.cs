@@ -115,3 +115,19 @@ public sealed class StatAsyncState : IAsyncState
     /// </summary>
     public CancellationTokenRegistration CancellationRegistration { get; set; }
 }
+
+/// <summary>
+/// State object for a pending asynchronous list operation.
+/// </summary>
+public sealed class ListAsyncState : IAsyncState
+{
+    /// <summary>
+    /// Completion source that resolves with entries when the native list callback arrives.
+    /// </summary>
+    public TaskCompletionSource<IReadOnlyList<Entry>> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Registration used to detach cancellation callbacks when the operation completes.
+    /// </summary>
+    public CancellationTokenRegistration CancellationRegistration { get; set; }
+}

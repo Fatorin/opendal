@@ -37,7 +37,7 @@ public struct OpenDALResult
 /// <summary>
 /// Result wrapper for operations that return a native pointer payload.
 /// </summary>
-internal struct OpenDALIntPtrResult
+internal struct OpenDALPointerResult
 {
     /// <summary>
     /// Native pointer payload on success.
@@ -60,23 +60,6 @@ internal struct OpenDALByteBufferResult
     /// Byte buffer payload on success.
     /// </summary>
     public ByteBuffer Buffer;
-
-    /// <summary>
-    /// Error details for the operation.
-    /// </summary>
-    public OpenDALError Error;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Result wrapper for operations that return metadata payload.
-/// </summary>
-internal struct OpenDALMetadataResult
-{
-    /// <summary>
-    /// Metadata payload pointer on success.
-    /// </summary>
-    public IntPtr Ptr;
 
     /// <summary>
     /// Error details for the operation.
@@ -113,6 +96,28 @@ internal struct OpenDALMetadata
     public int LastModifiedNanosecond;
 
     public IntPtr Version;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native entry payload used by list operations.
+/// </summary>
+internal struct OpenDALEntry
+{
+    public IntPtr Path;
+
+    public IntPtr Metadata;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native list payload that points to an array of entry pointers.
+/// </summary>
+internal struct OpenDALEntryList
+{
+    public IntPtr Entries;
+
+    public nuint Len;
 }
 
 [StructLayout(LayoutKind.Sequential)]

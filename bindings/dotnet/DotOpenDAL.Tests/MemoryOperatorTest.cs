@@ -414,4 +414,69 @@ public class MemoryOperatorTest
 
         Assert.Equal(ErrorCode.ConditionNotMatch, ex.Code);
     }
+
+    [Fact]
+    public void List_WithOptions_Recursive_WorksAsExpected()
+    {
+        using var op = new Operator("memory");
+        if (!op.Info.FullCapability.List)
+        {
+            return;
+        }
+
+        op.Write("list-options/alpha.txt", System.Text.Encoding.UTF8.GetBytes("a"));
+        op.Write("list-options/nested/beta.txt", System.Text.Encoding.UTF8.GetBytes("b"));
+
+        var shallow = op.List("list-options/", new ListOptions { Recursive = false });
+        var deep = op.List("list-options/", new ListOptions { Recursive = true });
+
+        Assert.Contains(shallow, entry => entry.Path == "list-options/alpha.txt");
+        Assert.DoesNotContain(shallow, entry => entry.Path == "list-options/nested/beta.txt");
+        Assert.Contains(deep, entry => entry.Path == "list-options/alpha.txt");
+        Assert.Contains(deep, entry => entry.Path == "list-options/nested/beta.txt");
+    }
+
+    [Fact]
+    public void List_WithOptions_Limit_AppliesWhenSupported()
+    {
+        using var op = new Operator("memory");
+        if (!op.Info.FullCapability.List || !op.Info.FullCapability.ListWithLimit)
+        {
+            return;
+        }
+
+        for (var i = 0; i < 8; i++)
+        {
+            op.Write($"list-limit/file-{i}.txt", System.Text.Encoding.UTF8.GetBytes(i.ToString()));
+        }
+
+        var entries = op.List("list-limit/", new ListOptions
+        {
+            Recursive = true,
+            Limit = 3,
+        });
+
+        Assert.True(entries.Count <= 3);
+    }
+
+    [Fact]
+    public async Task ListAsync_WithOptions_Recursive_WorksAsExpected()
+    {
+        using var op = new Operator("memory");
+        if (!op.Info.FullCapability.List)
+        {
+            return;
+        }
+
+        await op.WriteAsync("list-options-async/alpha.txt", System.Text.Encoding.UTF8.GetBytes("a"));
+        await op.WriteAsync("list-options-async/nested/beta.txt", System.Text.Encoding.UTF8.GetBytes("b"));
+
+        var entries = await op.ListAsync("list-options-async/", new ListOptions
+        {
+            Recursive = true,
+        });
+
+        Assert.Contains(entries, entry => entry.Path == "list-options-async/alpha.txt");
+        Assert.Contains(entries, entry => entry.Path == "list-options-async/nested/beta.txt");
+    }
 }

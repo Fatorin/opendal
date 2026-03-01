@@ -25,3 +25,4 @@ mod byte_buffer;
 mod executor;
 mod options;
 mod metadata;
+mod entry;
