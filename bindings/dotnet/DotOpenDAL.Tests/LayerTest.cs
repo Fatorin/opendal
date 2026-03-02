@@ -24,35 +24,41 @@ namespace DotOpenDAL.Tests;
 public class LayerTest
 {
     [Fact]
-    public void WithConcurrentLimit_ReturnsNewOperator()
+    public void WithConcurrentLimit_ReplacesCurrentOperator()
     {
         using var op = new Operator("memory");
-        using var layered = op.WithConcurrentLimit(4);
+        var before = op.Op;
+        var layered = op.WithLayer(new ConcurrentLimitLayer(4));
 
         Assert.NotEqual(IntPtr.Zero, layered.Op);
-        Assert.NotEqual(op.Op, layered.Op);
+        Assert.Same(op, layered);
+        Assert.NotEqual(before, op.Op);
 
-        layered.Write("layer-concurrent", [1, 2, 3]);
-        var value = layered.Read("layer-concurrent");
+        op.Write("layer-concurrent", [1, 2, 3]);
+        var value = op.Read("layer-concurrent");
         Assert.Equal([1, 2, 3], value);
     }
 
     [Fact]
-    public void WithRetry_ReturnsNewOperator()
+    public void WithRetry_ReplacesCurrentOperator()
     {
         using var op = new Operator("memory");
-        using var layered = op.WithRetry(
-            jitter: false,
-            factor: 2,
-            minDelay: TimeSpan.FromMilliseconds(1),
-            maxDelay: TimeSpan.FromMilliseconds(10),
-            maxTimes: 2);
+        var before = op.Op;
+        var layered = op.WithLayer(new RetryLayer
+        {
+            Jitter = false,
+            Factor = 2,
+            MinDelay = TimeSpan.FromMilliseconds(1),
+            MaxDelay = TimeSpan.FromMilliseconds(10),
+            MaxTimes = 2,
+        });
 
         Assert.NotEqual(IntPtr.Zero, layered.Op);
-        Assert.NotEqual(op.Op, layered.Op);
+        Assert.Same(op, layered);
+        Assert.NotEqual(before, op.Op);
 
-        layered.Write("layer-retry", [4, 5, 6]);
-        var value = layered.Read("layer-retry");
+        op.Write("layer-retry", [4, 5, 6]);
+        var value = op.Read("layer-retry");
         Assert.Equal([4, 5, 6], value);
     }
 
@@ -61,7 +67,7 @@ public class LayerTest
     {
         using var op = new Operator("memory");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => op.WithConcurrentLimit(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => op.WithLayer(new ConcurrentLimitLayer(0)));
     }
 
     [Fact]
@@ -69,22 +75,29 @@ public class LayerTest
     {
         using var op = new Operator("memory");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => op.WithRetry(factor: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => op.WithLayer(new RetryLayer
+        {
+            Factor = 0,
+        }));
     }
 
     [Fact]
-    public void WithTimeout_ReturnsNewOperator()
+    public void WithTimeout_ReplacesCurrentOperator()
     {
         using var op = new Operator("memory");
-        using var layered = op.WithTimeout(
-            timeout: TimeSpan.FromSeconds(5),
-            ioTimeout: TimeSpan.FromSeconds(2));
+        var before = op.Op;
+        var layered = op.WithLayer(new TimeoutLayer
+        {
+            Timeout = TimeSpan.FromSeconds(5),
+            IoTimeout = TimeSpan.FromSeconds(2),
+        });
 
         Assert.NotEqual(IntPtr.Zero, layered.Op);
-        Assert.NotEqual(op.Op, layered.Op);
+        Assert.Same(op, layered);
+        Assert.NotEqual(before, op.Op);
 
-        layered.Write("layer-timeout", [7, 8, 9]);
-        var value = layered.Read("layer-timeout");
+        op.Write("layer-timeout", [7, 8, 9]);
+        var value = op.Read("layer-timeout");
         Assert.Equal([7, 8, 9], value);
     }
 
@@ -93,6 +106,9 @@ public class LayerTest
     {
         using var op = new Operator("memory");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => op.WithTimeout(timeout: TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() => op.WithLayer(new TimeoutLayer
+        {
+            Timeout = TimeSpan.Zero,
+        }));
     }
 }

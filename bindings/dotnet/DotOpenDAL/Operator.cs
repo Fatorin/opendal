@@ -19,8 +19,9 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using DotOpenDAL.Layer;
 using DotOpenDAL.Layer.Abstractions;
+using DotOpenDAL.Options;
+using DotOpenDAL.Options.Abstractions;
 using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL;
@@ -30,10 +31,12 @@ namespace DotOpenDAL;
 /// </summary>
 public partial class Operator : SafeHandle
 {
-    private unsafe delegate TResult NativeOptionsInvoker<TResult>(IntPtr* keys, IntPtr* values, nuint len);
+    private static readonly IReadOnlyDictionary<string, string> EmptyNativeOptions = new Dictionary<string, string>();
+    private Lazy<OperatorInfo> info;
 
     private Operator() : base(IntPtr.Zero, true)
     {
+        info = CreateInfoLazy();
     }
 
     /// <summary>
@@ -46,32 +49,7 @@ public partial class Operator : SafeHandle
         get
         {
             ObjectDisposedException.ThrowIf(IsInvalid, this);
-            var result = NativeMethods.operator_info_get(this);
-            if (result.Error.IsError)
-            {
-                throw new OpenDALException(result.Error);
-            }
-
-            if (result.Ptr == IntPtr.Zero)
-            {
-                throw new InvalidOperationException("operator_info_get returned null pointer");
-            }
-
-            var payload = Marshal.PtrToStructure<OpenDALOperatorInfo>(result.Ptr);
-
-            try
-            {
-                return new OperatorInfo(
-                    Utilities.ReadUtf8(payload.Scheme),
-                    Utilities.ReadUtf8(payload.Root),
-                    Utilities.ReadUtf8(payload.Name),
-                    payload.FullCapability,
-                    payload.NativeCapability);
-            }
-            finally
-            {
-                NativeMethods.operator_info_free(result.Ptr);
-            }
+            return info.Value;
         }
     }
 
@@ -95,50 +73,10 @@ public partial class Operator : SafeHandle
     public unsafe Operator(string scheme, IReadOnlyDictionary<string, string>? options = null) : base(IntPtr.Zero, true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scheme);
+        info = CreateInfoLazy();
 
-        var optionCount = options?.Count ?? 0;
-        var keyPointers = optionCount > 0 ? new IntPtr[optionCount] : Array.Empty<IntPtr>();
-        var valuePointers = optionCount > 0 ? new IntPtr[optionCount] : Array.Empty<IntPtr>();
-
-        OpenDALPointerResult result;
-        try
-        {
-            if (optionCount > 0)
-            {
-                var index = 0;
-                foreach (var option in options!)
-                {
-                    keyPointers[index] = Marshal.StringToCoTaskMemUTF8(option.Key);
-                    valuePointers[index] = Marshal.StringToCoTaskMemUTF8(option.Value);
-                    index++;
-                }
-
-                fixed (IntPtr* keyPtr = keyPointers)
-                fixed (IntPtr* valuePtr = valuePointers)
-                {
-                    result = NativeMethods.operator_construct(scheme, keyPtr, valuePtr, (nuint)optionCount);
-                }
-            }
-            else
-            {
-                result = NativeMethods.operator_construct(scheme, null, null, 0);
-            }
-        }
-        finally
-        {
-            for (var index = 0; index < optionCount; index++)
-            {
-                if (keyPointers[index] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(keyPointers[index]);
-                }
-
-                if (valuePointers[index] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(valuePointers[index]);
-                }
-            }
-        }
+        using var nativeOptionsHandle = CreateNativeOptionsHandle(options ?? EmptyNativeOptions);
+        var result = NativeMethods.operator_construct(scheme, nativeOptionsHandle.Ptr);
 
         if (result.Ptr == IntPtr.Zero)
         {
@@ -161,10 +99,10 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
-    /// Applies the specified layer and returns a new operator instance.
+    /// Applies the specified layer and returns this operator instance.
     /// </summary>
     /// <param name="layer">Layer to apply.</param>
-    /// <returns>A new operator with the layer applied.</returns>
+    /// <returns>This operator with the layer applied.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="layer"/> is null.</exception>
     /// <exception cref="ObjectDisposedException">The operator has been disposed.</exception>
     /// <exception cref="OpenDALException">Native layer application fails.</exception>
@@ -176,62 +114,6 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
-    /// Applies retry behavior and returns a new operator instance.
-    /// </summary>
-    /// <param name="jitter">Whether to enable randomized retry jitter.</param>
-    /// <param name="factor">Retry delay growth factor.</param>
-    /// <param name="minDelay">Minimum retry delay. Defaults to 1 second.</param>
-    /// <param name="maxDelay">Maximum retry delay. Defaults to 60 seconds.</param>
-    /// <param name="maxTimes">Maximum retry attempts. Defaults to 3.</param>
-    /// <returns>A new operator with retry layer applied.</returns>
-    public Operator WithRetry(
-        bool jitter = false,
-        float factor = 2f,
-        TimeSpan? minDelay = null,
-        TimeSpan? maxDelay = null,
-        nuint maxTimes = 3)
-    {
-        var retry = new RetryLayer
-        {
-            Jitter = jitter,
-            Factor = factor,
-            MinDelay = minDelay ?? TimeSpan.FromSeconds(1),
-            MaxDelay = maxDelay ?? TimeSpan.FromSeconds(60),
-            MaxTimes = maxTimes,
-        };
-
-        return WithLayer(retry);
-    }
-
-    /// <summary>
-    /// Applies concurrent-limit behavior and returns a new operator instance.
-    /// </summary>
-    /// <param name="permits">Maximum concurrent permits. Must be greater than zero.</param>
-    /// <returns>A new operator with concurrent-limit layer applied.</returns>
-    public Operator WithConcurrentLimit(nuint permits)
-    {
-        var concurrentLimit = new ConcurrentLimitLayer(permits);
-        return WithLayer(concurrentLimit);
-    }
-
-    /// <summary>
-    /// Applies timeout behavior and returns a new operator instance.
-    /// </summary>
-    /// <param name="timeout">Timeout for non-IO operations. Defaults to 60 seconds.</param>
-    /// <param name="ioTimeout">Timeout for IO operations. Defaults to 10 seconds.</param>
-    /// <returns>A new operator with timeout layer applied.</returns>
-    public Operator WithTimeout(TimeSpan? timeout = null, TimeSpan? ioTimeout = null)
-    {
-        var timeoutLayer = new TimeoutLayer
-        {
-            Timeout = timeout ?? TimeSpan.FromSeconds(60),
-            IoTimeout = ioTimeout ?? TimeSpan.FromSeconds(10),
-        };
-
-        return WithLayer(timeoutLayer);
-    }
-
-    /// <summary>
     /// Writes the specified content to a path.
     /// </summary>
     /// <param name="path">Target path in the configured backend.</param>
@@ -240,7 +122,7 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native write fails.</exception>
     public void Write(string path, byte[] content)
     {
-        Write(path, content, executor: null);
+        Write(path, content, options: null, executor: null);
     }
 
     /// <summary>
@@ -251,7 +133,7 @@ public partial class Operator : SafeHandle
     /// <param name="options">Additional write options.</param>
     public void Write(string path, byte[] content, WriteOptions options)
     {
-        Write(path, content, options, executor: null);
+        Write(path, content, (WriteOptions?)options, executor: null);
     }
 
     /// <summary>
@@ -264,21 +146,7 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native write fails.</exception>
     public void Write(string path, byte[] content, Executor? executor)
     {
-        ArgumentNullException.ThrowIfNull(content);
-        ObjectDisposedException.ThrowIf(IsInvalid, this);
-        var executorHandle = GetExecutorHandle(executor);
-
-        unsafe
-        {
-            fixed (byte* ptr = content)
-            {
-                var result = NativeMethods.operator_write(this, executorHandle, path, ptr, (nuint)content.Length);
-                if (result.Error.IsError)
-                {
-                    throw new OpenDALException(result.Error);
-                }
-            }
-        }
+        Write(path, content, options: null, executor);
     }
 
     /// <summary>
@@ -288,80 +156,26 @@ public partial class Operator : SafeHandle
     /// <param name="content">Bytes to write.</param>
     /// <param name="options">Additional write options.</param>
     /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
-    public void Write(string path, byte[] content, WriteOptions options, Executor? executor)
+    public void Write(string path, byte[] content, WriteOptions? options, Executor? executor)
     {
         ArgumentNullException.ThrowIfNull(content);
-        ArgumentNullException.ThrowIfNull(options);
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options.ToNativeOptions();
-        var optionCount = nativeOptions.Count;
-        var keyPointers = optionCount > 0 ? new IntPtr[optionCount] : Array.Empty<IntPtr>();
-        var valuePointers = optionCount > 0 ? new IntPtr[optionCount] : Array.Empty<IntPtr>();
+        var nativeOptions = ToNativeOptions(options);
 
         OpenDALResult result;
-        try
+        unsafe
         {
-            if (optionCount > 0)
+            using var nativeOptionsHandle = CreateNativeOptionsHandle(nativeOptions);
+            fixed (byte* contentPtr = content)
             {
-                var optionIndex = 0;
-                foreach (var option in nativeOptions)
-                {
-                    keyPointers[optionIndex] = Marshal.StringToCoTaskMemUTF8(option.Key);
-                    valuePointers[optionIndex] = Marshal.StringToCoTaskMemUTF8(option.Value);
-                    optionIndex++;
-                }
-
-                unsafe
-                {
-                    fixed (byte* ptr = content)
-                    fixed (IntPtr* keyPtr = keyPointers)
-                    fixed (IntPtr* valuePtr = valuePointers)
-                    {
-                        result = NativeMethods.operator_write_with_options(
-                            this,
-                            executorHandle,
-                            path,
-                            ptr,
-                            (nuint)content.Length,
-                            keyPtr,
-                            valuePtr,
-                            (nuint)optionCount);
-                    }
-                }
-            }
-            else
-            {
-                unsafe
-                {
-                    fixed (byte* ptr = content)
-                    {
-                        result = NativeMethods.operator_write_with_options(
-                            this,
-                            executorHandle,
-                            path,
-                            ptr,
-                            (nuint)content.Length,
-                            null,
-                            null,
-                            0);
-                    }
-                }
-            }
-        }
-        finally
-        {
-            for (var optionIndex = 0; optionIndex < optionCount; optionIndex++)
-            {
-                if (keyPointers[optionIndex] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(keyPointers[optionIndex]);
-                }
-
-                if (valuePointers[optionIndex] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(valuePointers[optionIndex]);
-                }
+                result = NativeMethods.operator_write_with_options(
+                    this,
+                    executorHandle,
+                    path,
+                    contentPtr,
+                    (nuint)content.Length,
+                    nativeOptionsHandle.Ptr);
             }
         }
 
@@ -381,9 +195,9 @@ public partial class Operator : SafeHandle
     /// <exception cref="ObjectDisposedException">The operator has been disposed.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
     /// <exception cref="OpenDALException">Native write submission fails immediately.</exception>
-    public unsafe Task WriteAsync(string path, byte[] content, CancellationToken cancellationToken = default)
+    public Task WriteAsync(string path, byte[] content, CancellationToken cancellationToken = default)
     {
-        return WriteAsync(path, content, executor: null, cancellationToken);
+        return WriteAsync(path, content, options: null, executor: null, cancellationToken);
     }
 
     /// <summary>
@@ -394,13 +208,13 @@ public partial class Operator : SafeHandle
     /// <param name="options">Additional write options.</param>
     /// <param name="cancellationToken">Cancellation token for the managed task.</param>
     /// <returns>A task that completes when the native callback reports completion.</returns>
-    public unsafe Task WriteAsync(
+    public Task WriteAsync(
         string path,
         byte[] content,
         WriteOptions options,
         CancellationToken cancellationToken = default)
     {
-        return WriteAsync(path, content, options, executor: null, cancellationToken);
+        return WriteAsync(path, content, (WriteOptions?)options, executor: null, cancellationToken);
     }
 
     /// <summary>
@@ -414,160 +228,73 @@ public partial class Operator : SafeHandle
     /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
     /// <exception cref="OpenDALException">Native write submission fails immediately.</exception>
-    public unsafe Task WriteAsync(
+    public Task WriteAsync(
         string path,
         byte[] content,
         Executor? executor,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(content);
-        ObjectDisposedException.ThrowIf(IsInvalid, this);
-        cancellationToken.ThrowIfCancellationRequested();
-        var executorHandle = GetExecutorHandle(executor);
-
-        var state = new WriteAsyncState();
-        var context = AsyncStateRegistry.Register(state);
-
-        OpenDALResult result;
-        fixed (byte* ptr = content)
-        {
-            result = NativeMethods.operator_write_async(
-                this,
-                executorHandle,
-                path,
-                ptr,
-                (nuint)content.Length,
-                &OnWriteCompleted,
-                new IntPtr(context));
-        }
-
-        if (result.Error.IsError)
-        {
-            AsyncStateRegistry.Unregister(context);
-            throw new OpenDALException(result.Error);
-        }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            state.CancellationRegistration = cancellationToken.Register(static value =>
-            {
-                var current = (WriteAsyncState)value!;
-                current.Completion.TrySetCanceled();
-            }, state);
-        }
-
-        return state.Completion.Task;
+        return WriteAsync(path, content, options: null, executor, cancellationToken);
     }
 
     /// <summary>
-    /// Writes the specified content to a path asynchronously with write options using the provided executor.
+    /// Writes the specified content to a path asynchronously with optional write options and executor.
     /// </summary>
     /// <param name="path">Target path in the configured backend.</param>
     /// <param name="content">Bytes to write.</param>
-    /// <param name="options">Additional write options.</param>
+    /// <param name="options">Additional write options, or <see langword="null"/> for default behavior.</param>
     /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
     /// <param name="cancellationToken">Cancellation token for the managed task.</param>
     /// <returns>A task that completes when the native callback reports completion.</returns>
     public unsafe Task WriteAsync(
         string path,
         byte[] content,
-        WriteOptions options,
+        WriteOptions? options,
         Executor? executor,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(content);
-        ArgumentNullException.ThrowIfNull(options);
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         cancellationToken.ThrowIfCancellationRequested();
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options.ToNativeOptions();
-        var optionCount = nativeOptions.Count;
-        var keyPointers = optionCount > 0 ? new IntPtr[optionCount] : Array.Empty<IntPtr>();
-        var valuePointers = optionCount > 0 ? new IntPtr[optionCount] : Array.Empty<IntPtr>();
+        var nativeOptions = ToNativeOptions(options);
 
-        var state = new WriteAsyncState();
-        var context = AsyncStateRegistry.Register(state);
+        var context = AsyncStateRegistry.Register<object?>(out var asyncState);
 
-        OpenDALResult result;
         try
         {
-            if (optionCount > 0)
+            OpenDALResult submitResult;
+            unsafe
             {
-                var optionIndex = 0;
-                foreach (var option in nativeOptions)
+                using var nativeOptionsHandle = CreateNativeOptionsHandle(nativeOptions);
+                fixed (byte* contentPtr = content)
                 {
-                    keyPointers[optionIndex] = Marshal.StringToCoTaskMemUTF8(option.Key);
-                    valuePointers[optionIndex] = Marshal.StringToCoTaskMemUTF8(option.Value);
-                    optionIndex++;
-                }
-
-                fixed (byte* ptr = content)
-                fixed (IntPtr* keyPtr = keyPointers)
-                fixed (IntPtr* valuePtr = valuePointers)
-                {
-                    result = NativeMethods.operator_write_with_options_async(
+                    submitResult = NativeMethods.operator_write_with_options_async(
                         this,
                         executorHandle,
                         path,
-                        ptr,
+                        contentPtr,
                         (nuint)content.Length,
-                        keyPtr,
-                        valuePtr,
-                        (nuint)optionCount,
+                        nativeOptionsHandle.Ptr,
                         &OnWriteCompleted,
                         new IntPtr(context));
                 }
             }
-            else
-            {
-                fixed (byte* ptr = content)
-                {
-                    result = NativeMethods.operator_write_with_options_async(
-                        this,
-                        executorHandle,
-                        path,
-                        ptr,
-                        (nuint)content.Length,
-                        null,
-                        null,
-                        0,
-                        &OnWriteCompleted,
-                        new IntPtr(context));
-                }
-            }
-        }
-        finally
-        {
-            for (var optionIndex = 0; optionIndex < optionCount; optionIndex++)
-            {
-                if (keyPointers[optionIndex] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(keyPointers[optionIndex]);
-                }
 
-                if (valuePointers[optionIndex] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(valuePointers[optionIndex]);
-                }
+            if (submitResult.Error.IsError)
+            {
+                AsyncStateRegistry.Unregister(context);
+                throw new OpenDALException(submitResult.Error);
             }
-        }
 
-        if (result.Error.IsError)
+            asyncState.BindCancellation(cancellationToken);
+            return asyncState.Completion.Task;
+        }
+        catch
         {
             AsyncStateRegistry.Unregister(context);
-            throw new OpenDALException(result.Error);
+            throw;
         }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            state.CancellationRegistration = cancellationToken.Register(static value =>
-            {
-                var current = (WriteAsyncState)value!;
-                current.Completion.TrySetCanceled();
-            }, state);
-        }
-
-        return state.Completion.Task;
     }
 
     /// <summary>
@@ -579,7 +306,7 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native read fails.</exception>
     public byte[] Read(string path)
     {
-        return Read(path, executor: null);
+        return Read(path, options: null, executor: null);
     }
 
     /// <summary>
@@ -603,31 +330,7 @@ public partial class Operator : SafeHandle
     /// <exception cref="OpenDALException">Native read fails.</exception>
     public byte[] Read(string path, Executor? executor)
     {
-        ObjectDisposedException.ThrowIf(IsInvalid, this);
-        var executorHandle = GetExecutorHandle(executor);
-
-        var result = NativeMethods.operator_read(this, executorHandle, path);
-        if (result.Error.IsError)
-        {
-            throw new OpenDALException(result.Error);
-        }
-
-        try
-        {
-            if (result.Buffer.Data == IntPtr.Zero || result.Buffer.Len == 0)
-            {
-                return Array.Empty<byte>();
-            }
-
-            var size = checked((int)result.Buffer.Len);
-            var managed = new byte[size];
-            Marshal.Copy(result.Buffer.Data, managed, 0, size);
-            return managed;
-        }
-        finally
-        {
-            result.Buffer.Release();
-        }
+        return Read(path, options: null, executor);
     }
 
     /// <summary>
@@ -637,19 +340,19 @@ public partial class Operator : SafeHandle
     /// <param name="options">Additional read options.</param>
     /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
     /// <returns>The content bytes.</returns>
-    public byte[] Read(string path, ReadOptions options, Executor? executor)
+    public byte[] Read(string path, ReadOptions? options, Executor? executor)
     {
-        ArgumentNullException.ThrowIfNull(options);
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options.ToNativeOptions();
+        var nativeOptions = ToNativeOptions(options);
 
         OpenDALByteBufferResult result;
         unsafe
         {
-            result = WithNativeOptions(nativeOptions, (keys, values, len) =>
-                NativeMethods.operator_read_with_options(this, executorHandle, path, keys, values, len));
+            using var nativeOptionsHandle = CreateNativeOptionsHandle(nativeOptions);
+            result = NativeMethods.operator_read_with_options(this, executorHandle, path, nativeOptionsHandle.Ptr);
         }
+
         if (result.Error.IsError)
         {
             throw new OpenDALException(result.Error);
@@ -657,15 +360,7 @@ public partial class Operator : SafeHandle
 
         try
         {
-            if (result.Buffer.Data == IntPtr.Zero || result.Buffer.Len == 0)
-            {
-                return Array.Empty<byte>();
-            }
-
-            var size = checked((int)result.Buffer.Len);
-            var managed = new byte[size];
-            Marshal.Copy(result.Buffer.Data, managed, 0, size);
-            return managed;
+            return result.Buffer.ToManagedBytes();
         }
         finally
         {
@@ -682,9 +377,9 @@ public partial class Operator : SafeHandle
     /// <exception cref="ObjectDisposedException">The operator has been disposed.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
     /// <exception cref="OpenDALException">Native read submission fails immediately.</exception>
-    public unsafe Task<byte[]> ReadAsync(string path, CancellationToken cancellationToken = default)
+    public Task<byte[]> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
-        return ReadAsync(path, executor: null, cancellationToken);
+        return ReadAsync(path, options: null, executor: null, cancellationToken);
     }
 
     /// <summary>
@@ -694,9 +389,9 @@ public partial class Operator : SafeHandle
     /// <param name="options">Additional read options.</param>
     /// <param name="cancellationToken">Cancellation token for the managed task.</param>
     /// <returns>A task that resolves with the read content.</returns>
-    public unsafe Task<byte[]> ReadAsync(string path, ReadOptions options, CancellationToken cancellationToken = default)
+    public Task<byte[]> ReadAsync(string path, ReadOptions options, CancellationToken cancellationToken = default)
     {
-        return ReadAsync(path, options, executor: null, cancellationToken);
+        return ReadAsync(path, (ReadOptions?)options, executor: null, cancellationToken);
     }
 
     /// <summary>
@@ -709,93 +404,64 @@ public partial class Operator : SafeHandle
     /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
     /// <exception cref="OpenDALException">Native read submission fails immediately.</exception>
-    public unsafe Task<byte[]> ReadAsync(
+    public Task<byte[]> ReadAsync(
         string path,
         Executor? executor,
         CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(IsInvalid, this);
-        cancellationToken.ThrowIfCancellationRequested();
-        var executorHandle = GetExecutorHandle(executor);
-
-        var state = new ReadAsyncState();
-        var context = AsyncStateRegistry.Register(state);
-
-        var result = NativeMethods.operator_read_async(
-            this,
-            executorHandle,
-            path,
-            &OnReadCompleted,
-            new IntPtr(context));
-
-        if (result.Error.IsError)
-        {
-            AsyncStateRegistry.Unregister(context);
-            throw new OpenDALException(result.Error);
-        }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            state.CancellationRegistration = cancellationToken.Register(static value =>
-            {
-                var current = (ReadAsyncState)value!;
-                current.Completion.TrySetCanceled();
-            }, state);
-        }
-
-        return state.Completion.Task;
+        return ReadAsync(path, options: null, executor, cancellationToken);
     }
 
     /// <summary>
-    /// Reads bytes from a path asynchronously with read options using the provided executor.
+    /// Reads bytes from a path asynchronously with optional read options and executor.
     /// </summary>
     /// <param name="path">Source path in the configured backend.</param>
-    /// <param name="options">Additional read options.</param>
+    /// <param name="options">Additional read options, or <see langword="null"/> for default behavior.</param>
     /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
     /// <param name="cancellationToken">Cancellation token for the managed task.</param>
     /// <returns>A task that resolves with the read content.</returns>
     public unsafe Task<byte[]> ReadAsync(
         string path,
-        ReadOptions options,
+        ReadOptions? options,
         Executor? executor,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(options);
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         cancellationToken.ThrowIfCancellationRequested();
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options.ToNativeOptions();
+        var nativeOptions = ToNativeOptions(options);
 
-        var state = new ReadAsyncState();
-        var context = AsyncStateRegistry.Register(state);
+        var context = AsyncStateRegistry.Register<byte[]>(out var asyncState);
 
-        var result = WithNativeOptions(nativeOptions, (keys, values, len) =>
-            NativeMethods.operator_read_with_options_async(
-                this,
-                executorHandle,
-                path,
-                keys,
-                values,
-                len,
-                &OnReadCompleted,
-                new IntPtr(context)));
+        try
+        {
+            OpenDALResult submitResult;
+            unsafe
+            {
+                using var nativeOptionsHandle = CreateNativeOptionsHandle(nativeOptions);
+                submitResult = NativeMethods.operator_read_with_options_async(
+                    this,
+                    executorHandle,
+                    path,
+                    nativeOptionsHandle.Ptr,
+                    &OnReadCompleted,
+                    new IntPtr(context));
+            }
 
-        if (result.Error.IsError)
+            if (submitResult.Error.IsError)
+            {
+                AsyncStateRegistry.Unregister(context);
+                throw new OpenDALException(submitResult.Error);
+            }
+
+            asyncState.BindCancellation(cancellationToken);
+            return asyncState.Completion.Task;
+        }
+        catch
         {
             AsyncStateRegistry.Unregister(context);
-            throw new OpenDALException(result.Error);
+            throw;
         }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            state.CancellationRegistration = cancellationToken.Register(static value =>
-            {
-                var current = (ReadAsyncState)value!;
-                current.Completion.TrySetCanceled();
-            }, state);
-        }
-
-        return state.Completion.Task;
     }
 
     /// <summary>
@@ -820,20 +486,20 @@ public partial class Operator : SafeHandle
     {
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options?.ToNativeOptions() ?? new Dictionary<string, string>();
+        var nativeOptions = ToNativeOptions(options);
 
         OpenDALPointerResult result;
         unsafe
         {
-            result = WithNativeOptions(nativeOptions, (keys, values, len) =>
-                NativeMethods.operator_stat_with_options(this, executorHandle, path, keys, values, len));
+            using var nativeOptionsHandle = CreateNativeOptionsHandle(nativeOptions);
+            result = NativeMethods.operator_stat_with_options(this, executorHandle, path, nativeOptionsHandle.Ptr);
         }
         if (result.Error.IsError)
         {
             throw new OpenDALException(result.Error);
         }
 
-        return FromMetadataPointer(result.Ptr);
+        return Metadata.FromNativePointer(result.Ptr);
     }
 
     /// <summary>
@@ -868,38 +534,39 @@ public partial class Operator : SafeHandle
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         cancellationToken.ThrowIfCancellationRequested();
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options?.ToNativeOptions() ?? new Dictionary<string, string>();
+        var nativeOptions = ToNativeOptions(options);
 
-        var state = new StatAsyncState();
-        var context = AsyncStateRegistry.Register(state);
+        var context = AsyncStateRegistry.Register<Metadata>(out var asyncState);
 
-        var result = WithNativeOptions(nativeOptions, (keys, values, len) =>
-            NativeMethods.operator_stat_with_options_async(
-                this,
-                executorHandle,
-                path,
-                keys,
-                values,
-                len,
-                &OnStatCompleted,
-                new IntPtr(context)));
+        try
+        {
+            OpenDALResult submitResult;
+            unsafe
+            {
+                using var nativeOptionsHandle = CreateNativeOptionsHandle(nativeOptions);
+                submitResult = NativeMethods.operator_stat_with_options_async(
+                    this,
+                    executorHandle,
+                    path,
+                    nativeOptionsHandle.Ptr,
+                    &OnStatCompleted,
+                    new IntPtr(context));
+            }
 
-        if (result.Error.IsError)
+            if (submitResult.Error.IsError)
+            {
+                AsyncStateRegistry.Unregister(context);
+                throw new OpenDALException(submitResult.Error);
+            }
+
+            asyncState.BindCancellation(cancellationToken);
+            return asyncState.Completion.Task;
+        }
+        catch
         {
             AsyncStateRegistry.Unregister(context);
-            throw new OpenDALException(result.Error);
+            throw;
         }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            state.CancellationRegistration = cancellationToken.Register(static value =>
-            {
-                var current = (StatAsyncState)value!;
-                current.Completion.TrySetCanceled();
-            }, state);
-        }
-
-        return state.Completion.Task;
     }
 
     /// <summary>
@@ -924,13 +591,13 @@ public partial class Operator : SafeHandle
     {
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options?.ToNativeOptions() ?? new Dictionary<string, string>();
+        var nativeOptions = ToNativeOptions(options);
 
         OpenDALPointerResult result;
         unsafe
         {
-            result = WithNativeOptions(nativeOptions, (keys, values, len) =>
-                NativeMethods.operator_list_with_options(this, executorHandle, path, keys, values, len));
+            using var nativeOptionsHandle = CreateNativeOptionsHandle(nativeOptions);
+            result = NativeMethods.operator_list_with_options(this, executorHandle, path, nativeOptionsHandle.Ptr);
         }
 
         if (result.Error.IsError)
@@ -938,7 +605,7 @@ public partial class Operator : SafeHandle
             throw new OpenDALException(result.Error);
         }
 
-        return FromEntryListPointer(result.Ptr);
+        return Entry.FromNativePointer(result.Ptr);
     }
 
     /// <summary>
@@ -964,7 +631,7 @@ public partial class Operator : SafeHandle
     /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
     /// <param name="cancellationToken">Cancellation token for the managed task.</param>
     /// <returns>A task that resolves with listed entries.</returns>
-    public unsafe Task<IReadOnlyList<Entry>> ListAsync(
+    public Task<IReadOnlyList<Entry>> ListAsync(
         string path,
         ListOptions? options,
         Executor? executor,
@@ -973,38 +640,37 @@ public partial class Operator : SafeHandle
         ObjectDisposedException.ThrowIf(IsInvalid, this);
         cancellationToken.ThrowIfCancellationRequested();
         var executorHandle = GetExecutorHandle(executor);
-        var nativeOptions = options?.ToNativeOptions() ?? new Dictionary<string, string>();
 
-        var state = new ListAsyncState();
-        var context = AsyncStateRegistry.Register(state);
+        var context = AsyncStateRegistry.Register<IReadOnlyList<Entry>>(out var asyncState);
 
-        var result = WithNativeOptions(nativeOptions, (keys, values, len) =>
-            NativeMethods.operator_list_with_options_async(
-                this,
-                executorHandle,
-                path,
-                keys,
-                values,
-                len,
-                &OnListCompleted,
-                new IntPtr(context)));
+        try
+        {
+            using var nativeOptions = CreateNativeOptionsHandle(ToNativeOptions(options));
+            unsafe
+            {
+                OpenDALResult submitResult = NativeMethods.operator_list_with_options_async(
+                    this,
+                    executorHandle,
+                    path,
+                    nativeOptions.Ptr,
+                    &OnListCompleted,
+                    new IntPtr(context));
 
-        if (result.Error.IsError)
+                if (submitResult.Error.IsError)
+                {
+                    AsyncStateRegistry.Unregister(context);
+                    throw new OpenDALException(submitResult.Error);
+                }
+            }
+
+            asyncState.BindCancellation(cancellationToken);
+            return asyncState.Completion.Task;
+        }
+        catch
         {
             AsyncStateRegistry.Unregister(context);
-            throw new OpenDALException(result.Error);
+            throw;
         }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            state.CancellationRegistration = cancellationToken.Register(static value =>
-            {
-                var current = (ListAsyncState)value!;
-                current.Completion.TrySetCanceled();
-            }, state);
-        }
-
-        return state.Completion.Task;
     }
 
     /// <summary>
@@ -1017,7 +683,7 @@ public partial class Operator : SafeHandle
         return true;
     }
 
-    internal static Operator FromLayerResult(OpenDALPointerResult result)
+    internal Operator ApplyLayerResult(OpenDALPointerResult result)
     {
         if (result.Error.IsError)
         {
@@ -1029,14 +695,16 @@ public partial class Operator : SafeHandle
             throw new InvalidOperationException("Layer application returned null operator pointer");
         }
 
-        return FromOwnedHandle(result.Ptr);
-    }
+        var oldHandle = handle;
+        SetHandle(result.Ptr);
+        info = CreateInfoLazy();
 
-    private static Operator FromOwnedHandle(IntPtr handle)
-    {
-        var op = new Operator();
-        op.SetHandle(handle);
-        return op;
+        if (oldHandle != IntPtr.Zero)
+        {
+            NativeMethods.operator_free(oldHandle);
+        }
+
+        return this;
     }
 
     private static IntPtr GetExecutorHandle(Executor? executor)
@@ -1050,146 +718,137 @@ public partial class Operator : SafeHandle
         return executor.DangerousGetHandle();
     }
 
-    private static unsafe TResult WithNativeOptions<TResult>(
-        IReadOnlyDictionary<string, string> options,
-        NativeOptionsInvoker<TResult> invoker)
+    private Lazy<OperatorInfo> CreateInfoLazy()
+    {
+        return new Lazy<OperatorInfo>(
+            () => OperatorInfo.FromNativePointerResult(NativeMethods.operator_info_get(this)),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    private static IReadOnlyDictionary<string, string> ToNativeOptions(IOptions? options)
+    {
+        return options is null ? EmptyNativeOptions : options.ToNativeOptions();
+    }
+
+    private static NativeOptionsHandle CreateNativeOptionsHandle(IReadOnlyDictionary<string, string> options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        if (options.Count == 0)
+        var handle = NativeMethods.operator_options_new();
+        if (handle == IntPtr.Zero)
         {
-            return invoker(null, null, 0);
+            throw new InvalidOperationException("Failed to allocate native options handle");
         }
-
-        var keyPointers = new IntPtr[options.Count];
-        var valuePointers = new IntPtr[options.Count];
-        var index = 0;
 
         try
         {
             foreach (var option in options)
             {
-                keyPointers[index] = Marshal.StringToCoTaskMemUTF8(option.Key);
-                valuePointers[index] = Marshal.StringToCoTaskMemUTF8(option.Value);
-                index++;
+                var setResult = NativeMethods.operator_options_set(handle, option.Key, option.Value);
+                if (setResult.Error.IsError)
+                {
+                    throw new OpenDALException(setResult.Error);
+                }
             }
 
-            fixed (IntPtr* keyPtr = keyPointers)
-            fixed (IntPtr* valuePtr = valuePointers)
-            {
-                return invoker(keyPtr, valuePtr, (nuint)options.Count);
-            }
+            return new NativeOptionsHandle(handle);
         }
-        finally
+        catch
         {
-            for (var pointerIndex = 0; pointerIndex < options.Count; pointerIndex++)
-            {
-                if (keyPointers[pointerIndex] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(keyPointers[pointerIndex]);
-                }
-
-                if (valuePointers[pointerIndex] != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(valuePointers[pointerIndex]);
-                }
-            }
+            NativeMethods.operator_options_free(handle);
+            throw;
         }
     }
 
-    private static Metadata FromMetadataPointer(IntPtr ptr)
+    private sealed class NativeOptionsHandle : IDisposable
     {
-        if (ptr == IntPtr.Zero)
+        private IntPtr ptr;
+
+        public NativeOptionsHandle(IntPtr ptr)
         {
-            throw new InvalidOperationException("stat returned null metadata pointer");
+            this.ptr = ptr;
         }
 
-        var payload = Marshal.PtrToStructure<OpenDALMetadata>(ptr);
+        public IntPtr Ptr => ptr;
 
+        public void Dispose()
+        {
+            if (ptr == IntPtr.Zero)
+            {
+                return;
+            }
+
+            NativeMethods.operator_options_free(ptr);
+            ptr = IntPtr.Zero;
+        }
+    }
+
+    #region Async Helpers
+
+    private static bool TryTakeAsyncState<T>(IntPtr context, OpenDALError error, out AsyncState<T>? state)
+    {
+        if (AsyncStateRegistry.TryTake<AsyncState<T>>(context, out var current))
+        {
+            state = current;
+            return true;
+        }
+
+        error.Release();
+        state = null;
+        return false;
+    }
+
+    private static bool TryTakeAsyncState<T, TState>(
+        IntPtr context,
+        OpenDALError error,
+        TState onMissingState,
+        Action<TState> onMissing,
+        out AsyncState<T>? state)
+    {
+        if (TryTakeAsyncState(context, error, out state))
+        {
+            return true;
+        }
+
+        onMissing(onMissingState);
+        return false;
+    }
+
+    private static void CompleteAsyncCallback<TOutput>(
+        AsyncState<TOutput> state,
+        OpenDALError error,
+        TOutput result)
+    {
+        CompleteAsyncCallback(state, error, result, static value => value);
+    }
+
+    private static void CompleteAsyncCallback<TInput, TOutput>(
+        AsyncState<TOutput> state,
+        OpenDALError error,
+        TInput input,
+        Func<TInput, TOutput> resultFactory)
+    {
         try
         {
-            return FromMetadataPayload(payload);
-        }
-        finally
-        {
-            NativeMethods.metadata_free(ptr);
-        }
-    }
+            state.CancellationRegistration.Dispose();
 
-    private static Metadata FromMetadataPayload(OpenDALMetadata payload)
-    {
-        DateTimeOffset? lastModified = null;
-        if (payload.LastModifiedHasValue != 0)
-        {
-            lastModified = DateTimeOffset.FromUnixTimeSeconds(payload.LastModifiedSecond)
-                .AddTicks(payload.LastModifiedNanosecond / 100);
-        }
-
-        var mode = payload.Mode switch
-        {
-            0 => EntryMode.File,
-            1 => EntryMode.Dir,
-            _ => EntryMode.Unknown,
-        };
-
-        static string? ReadNullableUtf8(IntPtr value)
-        {
-            return value == IntPtr.Zero ? null : Utilities.ReadUtf8(value);
-        }
-
-        return new Metadata(
-            mode,
-            payload.ContentLength,
-            ReadNullableUtf8(payload.ContentDisposition),
-            ReadNullableUtf8(payload.ContentMd5),
-            ReadNullableUtf8(payload.ContentType),
-            ReadNullableUtf8(payload.ContentEncoding),
-            ReadNullableUtf8(payload.CacheControl),
-            ReadNullableUtf8(payload.ETag),
-            lastModified,
-            ReadNullableUtf8(payload.Version));
-    }
-
-    private static IReadOnlyList<Entry> FromEntryListPointer(IntPtr ptr)
-    {
-        if (ptr == IntPtr.Zero)
-        {
-            return Array.Empty<Entry>();
-        }
-
-        var payload = Marshal.PtrToStructure<OpenDALEntryList>(ptr);
-        var results = new List<Entry>(checked((int)payload.Len));
-
-        try
-        {
-            for (var index = 0; index < (int)payload.Len; index++)
+            if (error.IsError)
             {
-                var entryPtr = Marshal.ReadIntPtr(payload.Entries, index * IntPtr.Size);
-                if (entryPtr == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var entryPayload = Marshal.PtrToStructure<OpenDALEntry>(entryPtr);
-                var path = Utilities.ReadUtf8(entryPayload.Path);
-
-                if (entryPayload.Metadata == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var metadataPayload = Marshal.PtrToStructure<OpenDALMetadata>(entryPayload.Metadata);
-                var metadata = FromMetadataPayload(metadataPayload);
-                results.Add(new Entry(path, metadata));
+                state.Completion.TrySetException(new OpenDALException(error));
+                return;
             }
 
-            return results;
+            state.Completion.TrySetResult(resultFactory(input));
         }
-        finally
+        catch (Exception ex)
         {
-            NativeMethods.entry_list_free(ptr);
+            state.Completion.TrySetException(ex);
         }
     }
+
+    #endregion
+
+    #region Async Callbacks
 
     /// <summary>
     /// Native callback invoked when an asynchronous write operation finishes.
@@ -1199,28 +858,12 @@ public partial class Operator : SafeHandle
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnWriteCompleted(IntPtr context, OpenDALResult result)
     {
-        if (!AsyncStateRegistry.TryTake<WriteAsyncState>(context, out var state))
+        if (!TryTakeAsyncState(context, result.Error, out AsyncState<object?>? state))
         {
-            result.Error.Release();
             return;
         }
 
-        try
-        {
-            state.CancellationRegistration.Dispose();
-
-            if (result.Error.IsError)
-            {
-                state.Completion.TrySetException(new OpenDALException(result.Error));
-                return;
-            }
-
-            state.Completion.TrySetResult();
-        }
-        catch (Exception ex)
-        {
-            state.Completion.TrySetException(ex);
-        }
+        CompleteAsyncCallback(state!, result.Error, null);
     }
 
     /// <summary>
@@ -1231,37 +874,19 @@ public partial class Operator : SafeHandle
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnReadCompleted(IntPtr context, OpenDALByteBufferResult result)
     {
-        if (!AsyncStateRegistry.TryTake<ReadAsyncState>(context, out var state))
+        if (!TryTakeAsyncState(
+                context,
+                result.Error,
+            result.Buffer,
+            static buffer => buffer.Release(),
+                out AsyncState<byte[]>? state))
         {
-            result.Error.Release();
-            result.Buffer.Release();
             return;
         }
 
         try
         {
-            state.CancellationRegistration.Dispose();
-
-            if (result.Error.IsError)
-            {
-                state.Completion.TrySetException(new OpenDALException(result.Error));
-                return;
-            }
-
-            if (result.Buffer.Data == IntPtr.Zero || result.Buffer.Len == 0)
-            {
-                state.Completion.TrySetResult(Array.Empty<byte>());
-                return;
-            }
-
-            var size = checked((int)result.Buffer.Len);
-            var managed = new byte[size];
-            Marshal.Copy(result.Buffer.Data, managed, 0, size);
-            state.Completion.TrySetResult(managed);
-        }
-        catch (Exception ex)
-        {
-            state.Completion.TrySetException(ex);
+            CompleteAsyncCallback(state!, result.Error, result.Buffer, static buffer => buffer.ToManagedBytes());
         }
         finally
         {
@@ -1277,32 +902,17 @@ public partial class Operator : SafeHandle
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnStatCompleted(IntPtr context, OpenDALPointerResult result)
     {
-        if (!AsyncStateRegistry.TryTake<StatAsyncState>(context, out var state))
+        if (!TryTakeAsyncState(
+            context,
+            result.Error,
+            result.Ptr,
+            static ptr => NativeMethods.metadata_free(ptr),
+            out AsyncState<Metadata>? state))
         {
-            result.Error.Release();
-            if (result.Ptr != IntPtr.Zero)
-            {
-                NativeMethods.metadata_free(result.Ptr);
-            }
             return;
         }
 
-        try
-        {
-            state.CancellationRegistration.Dispose();
-
-            if (result.Error.IsError)
-            {
-                state.Completion.TrySetException(new OpenDALException(result.Error));
-                return;
-            }
-
-            state.Completion.TrySetResult(FromMetadataPointer(result.Ptr));
-        }
-        catch (Exception ex)
-        {
-            state.Completion.TrySetException(ex);
-        }
+        CompleteAsyncCallback(state!, result.Error, result.Ptr, Metadata.FromNativePointer);
     }
 
     /// <summary>
@@ -1313,32 +923,14 @@ public partial class Operator : SafeHandle
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnListCompleted(IntPtr context, OpenDALPointerResult result)
     {
-        if (!AsyncStateRegistry.TryTake<ListAsyncState>(context, out var state))
+        if (!TryTakeAsyncState(context, result.Error, result.Ptr, static ptr => NativeMethods.entry_list_free(ptr), out AsyncState<IReadOnlyList<Entry>>? state))
         {
-            result.Error.Release();
-            if (result.Ptr != IntPtr.Zero)
-            {
-                NativeMethods.entry_list_free(result.Ptr);
-            }
             return;
         }
 
-        try
-        {
-            state.CancellationRegistration.Dispose();
-
-            if (result.Error.IsError)
-            {
-                state.Completion.TrySetException(new OpenDALException(result.Error));
-                return;
-            }
-
-            state.Completion.TrySetResult(FromEntryListPointer(result.Ptr));
-        }
-        catch (Exception ex)
-        {
-            state.Completion.TrySetException(ex);
-        }
+        CompleteAsyncCallback(state!, result.Error, result.Ptr, Entry.FromNativePointer);
     }
+
+    #endregion
 
 }

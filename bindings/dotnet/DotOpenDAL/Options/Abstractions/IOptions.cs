@@ -17,29 +17,12 @@
  * under the License.
  */
 
-using DotOpenDAL.Layer.Abstractions;
+namespace DotOpenDAL.Options.Abstractions;
 
-namespace DotOpenDAL.Layer;
-
-public sealed class ConcurrentLimitLayer : ILayer
+/// <summary>
+/// Represents operation options that can be converted to native key/value pairs.
+/// </summary>
+public interface IOptions
 {
-    public nuint Permits { get; }
-
-    public ConcurrentLimitLayer(nuint permits)
-    {
-        if (permits == 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(permits), "Permits must be greater than zero.");
-        }
-        Permits = permits;
-    }
-
-    public Operator Apply(Operator op)
-    {
-        ArgumentNullException.ThrowIfNull(op);
-        ObjectDisposedException.ThrowIf(op.IsInvalid, op);
-
-        var result = NativeMethods.operator_layer_concurrent_limit(op, Permits);
-        return op.ApplyLayerResult(result);
-    }
+    IReadOnlyDictionary<string, string> ToNativeOptions();
 }

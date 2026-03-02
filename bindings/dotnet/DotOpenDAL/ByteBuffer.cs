@@ -43,6 +43,22 @@ public struct ByteBuffer
     public nuint Capacity;
 
     /// <summary>
+    /// Copies the unmanaged bytes into a managed array.
+    /// </summary>
+    public readonly byte[] ToManagedBytes()
+    {
+        if (Data == IntPtr.Zero || Len == 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var size = checked((int)Len);
+        var managed = new byte[size];
+        Marshal.Copy(Data, managed, 0, size);
+        return managed;
+    }
+
+    /// <summary>
     /// Releases the unmanaged buffer allocated by the Rust binding.
     /// </summary>
     public readonly void Release()

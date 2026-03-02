@@ -47,7 +47,7 @@ public sealed class RetryLayer : ILayer
             ToNanos(MaxDelay),
             MaxTimes);
 
-        return Operator.FromLayerResult(result);
+        return op.ApplyLayerResult(result);
     }
 
     private void Validate()

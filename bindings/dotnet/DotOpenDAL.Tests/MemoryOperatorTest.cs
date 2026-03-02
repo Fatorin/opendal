@@ -18,6 +18,7 @@
  */
 
 using DotOpenDAL.ServiceConfig;
+using DotOpenDAL.Options;
 
 namespace DotOpenDAL.Tests;
 

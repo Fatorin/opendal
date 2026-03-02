@@ -17,12 +17,14 @@
  * under the License.
  */
 
-namespace DotOpenDAL;
+using DotOpenDAL.Options.Abstractions;
+
+namespace DotOpenDAL.Options;
 
 /// <summary>
 /// Additional options for list operations.
 /// </summary>
-public sealed class ListOptions
+public sealed class ListOptions : IOptions
 {
     public bool Recursive { get; init; }
 
@@ -34,40 +36,16 @@ public sealed class ListOptions
 
     public bool Deleted { get; init; }
 
-    internal IReadOnlyDictionary<string, string> ToNativeOptions()
+    public IReadOnlyDictionary<string, string> ToNativeOptions()
     {
-        if (Limit is <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(Limit), "Limit must be > 0 when provided.");
-        }
+        OptionValidators.RequireNullableGreaterThanZero(Limit, nameof(Limit));
 
-        var options = new Dictionary<string, string>();
-
-        if (Recursive)
-        {
-            options["recursive"] = "true";
-        }
-
-        if (Limit is not null)
-        {
-            options["limit"] = Limit.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        if (!string.IsNullOrEmpty(StartAfter))
-        {
-            options["start_after"] = StartAfter;
-        }
-
-        if (Versions)
-        {
-            options["versions"] = "true";
-        }
-
-        if (Deleted)
-        {
-            options["deleted"] = "true";
-        }
-
-        return options;
+        return new NativeOptionsBuilder()
+            .AddBoolTrue("recursive", Recursive)
+            .AddNullableInt64("limit", Limit)
+            .AddString("start_after", StartAfter)
+            .AddBoolTrue("versions", Versions)
+            .AddBoolTrue("deleted", Deleted)
+            .Build();
     }
 }

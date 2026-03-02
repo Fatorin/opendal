@@ -18,6 +18,7 @@
  */
 
 namespace DotOpenDAL;
+using System.Runtime.InteropServices;
 
 /// <summary>
 /// Represents metadata of an OpenDAL operator.
@@ -56,5 +57,34 @@ public sealed class OperatorInfo
         Name = name;
         FullCapability = fullCapability;
         NativeCapability = nativeCapability;
+    }
+
+    internal static OperatorInfo FromNativePointerResult(OpenDALPointerResult result)
+    {
+        if (result.Error.IsError)
+        {
+            throw new OpenDALException(result.Error);
+        }
+
+        if (result.Ptr == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("operator_info_get returned null pointer");
+        }
+
+        var payload = Marshal.PtrToStructure<OpenDALOperatorInfo>(result.Ptr);
+
+        try
+        {
+            return new OperatorInfo(
+                Utilities.ReadUtf8(payload.Scheme),
+                Utilities.ReadUtf8(payload.Root),
+                Utilities.ReadUtf8(payload.Name),
+                payload.FullCapability,
+                payload.NativeCapability);
+        }
+        finally
+        {
+            NativeMethods.operator_info_free(result.Ptr);
+        }
     }
 }

@@ -1,0 +1,132 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+namespace DotOpenDAL.Options;
+
+/// <summary>
+/// Builder that incrementally collects native key/value options.
+/// </summary>
+internal sealed class NativeOptionsBuilder
+{
+    private readonly Dictionary<string, string> options = new();
+
+    /// <summary>
+    /// Adds the option with value "true" when <paramref name="value"/> is true.
+    /// </summary>
+    public NativeOptionsBuilder AddBoolTrue(string key, bool value)
+    {
+        if (value)
+        {
+            options[key] = "true";
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Adds the option when the string value is not null or empty.
+    /// </summary>
+    public NativeOptionsBuilder AddString(string key, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            options[key] = value;
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Adds the option when the int value differs from the specified default.
+    /// </summary>
+    public NativeOptionsBuilder AddInt32IfNotDefault(string key, int value, int defaultValue)
+    {
+        if (value != defaultValue)
+        {
+            options[key] = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Adds the option when the long value differs from the specified default.
+    /// </summary>
+    public NativeOptionsBuilder AddInt64IfNotDefault(string key, long value, long defaultValue)
+    {
+        if (value != defaultValue)
+        {
+            options[key] = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Adds the option when the nullable long value is provided.
+    /// </summary>
+    public NativeOptionsBuilder AddNullableInt64(string key, long? value)
+    {
+        if (value is not null)
+        {
+            options[key] = value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Adds the option as Unix time milliseconds when the timestamp is provided.
+    /// </summary>
+    public NativeOptionsBuilder AddUnixTimeMilliseconds(string key, DateTimeOffset? value)
+    {
+        if (value is not null)
+        {
+            options[key] = value.Value.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Adds prefixed entries from the provided dictionary.
+    /// </summary>
+    public NativeOptionsBuilder AddPrefixedEntries(string prefix, IReadOnlyDictionary<string, string>? values)
+    {
+        if (values is null)
+        {
+            return this;
+        }
+
+        foreach (var entry in values)
+        {
+            options[$"{prefix}{entry.Key}"] = entry.Value;
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Builds the final native options dictionary.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Build()
+    {
+        return options;
+    }
+}

@@ -38,7 +38,7 @@ public sealed class TimeoutLayer : ILayer
             ToNanos(Timeout),
             ToNanos(IoTimeout));
 
-        return Operator.FromLayerResult(result);
+        return op.ApplyLayerResult(result);
     }
 
     private void Validate()

@@ -17,6 +17,8 @@
  * under the License.
  */
 
+using System.Runtime.InteropServices;
+
 namespace DotOpenDAL;
 
 /// <summary>
@@ -33,4 +35,44 @@ public sealed class Entry
     public string Path { get; }
 
     public Metadata Metadata { get; }
+
+    internal static IReadOnlyList<Entry> FromNativePointer(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero)
+        {
+            return Array.Empty<Entry>();
+        }
+
+        var payload = Marshal.PtrToStructure<OpenDALEntryList>(ptr);
+        var count = checked((int)payload.Len);
+        var results = new List<Entry>(count);
+
+        try
+        {
+            for (var index = 0; index < count; index++)
+            {
+                var entryPtr = Marshal.ReadIntPtr(payload.Entries, index * IntPtr.Size);
+                if (entryPtr == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                var entryPayload = Marshal.PtrToStructure<OpenDALEntry>(entryPtr);
+                if (entryPayload.Metadata == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                var path = Utilities.ReadUtf8(entryPayload.Path);
+                var metadataPayload = Marshal.PtrToStructure<OpenDALMetadata>(entryPayload.Metadata);
+                results.Add(new Entry(path, Metadata.FromNativePayload(metadataPayload)));
+            }
+
+            return results;
+        }
+        finally
+        {
+            NativeMethods.entry_list_free(ptr);
+        }
+    }
 }

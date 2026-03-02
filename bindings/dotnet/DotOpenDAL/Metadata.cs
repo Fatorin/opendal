@@ -17,6 +17,8 @@
  * under the License.
  */
 
+using System.Runtime.InteropServices;
+
 namespace DotOpenDAL;
 
 /// <summary>
@@ -81,4 +83,57 @@ public sealed class Metadata
     public bool IsFile => Mode == EntryMode.File;
 
     public bool IsDir => Mode == EntryMode.Dir;
+
+    internal static Metadata FromNativePointer(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("stat returned null metadata pointer");
+        }
+
+        var payload = Marshal.PtrToStructure<OpenDALMetadata>(ptr);
+
+        try
+        {
+            return FromNativePayload(payload);
+        }
+        finally
+        {
+            NativeMethods.metadata_free(ptr);
+        }
+    }
+
+    internal static Metadata FromNativePayload(OpenDALMetadata payload)
+    {
+        DateTimeOffset? lastModified = null;
+        if (payload.LastModifiedHasValue != 0)
+        {
+            lastModified = DateTimeOffset.FromUnixTimeSeconds(payload.LastModifiedSecond)
+                .AddTicks(payload.LastModifiedNanosecond / 100);
+        }
+
+        var mode = payload.Mode switch
+        {
+            0 => EntryMode.File,
+            1 => EntryMode.Dir,
+            _ => EntryMode.Unknown,
+        };
+
+        static string? ReadNullableUtf8(IntPtr value)
+        {
+            return value == IntPtr.Zero ? null : Utilities.ReadUtf8(value);
+        }
+
+        return new Metadata(
+            mode,
+            payload.ContentLength,
+            ReadNullableUtf8(payload.ContentDisposition),
+            ReadNullableUtf8(payload.ContentMd5),
+            ReadNullableUtf8(payload.ContentType),
+            ReadNullableUtf8(payload.ContentEncoding),
+            ReadNullableUtf8(payload.CacheControl),
+            ReadNullableUtf8(payload.ETag),
+            lastModified,
+            ReadNullableUtf8(payload.Version));
+    }
 }
