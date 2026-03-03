@@ -19,6 +19,7 @@
 
 namespace DotOpenDAL;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 /// <summary>
 /// Represents metadata of an OpenDAL operator.
@@ -59,32 +60,55 @@ public sealed class OperatorInfo
         NativeCapability = nativeCapability;
     }
 
-    internal static OperatorInfo FromNativePointerResult(OpenDALPointerResult result)
+    internal static unsafe OperatorInfo FromNativePointer(IntPtr ptr)
     {
-        if (result.Error.IsError)
-        {
-            throw new OpenDALException(result.Error);
-        }
-
-        if (result.Ptr == IntPtr.Zero)
+        if (ptr == IntPtr.Zero)
         {
             throw new InvalidOperationException("operator_info_get returned null pointer");
         }
 
-        var payload = Marshal.PtrToStructure<OpenDALOperatorInfo>(result.Ptr);
-
-        try
-        {
-            return new OperatorInfo(
-                Utilities.ReadUtf8(payload.Scheme),
-                Utilities.ReadUtf8(payload.Root),
-                Utilities.ReadUtf8(payload.Name),
-                payload.FullCapability,
-                payload.NativeCapability);
-        }
-        finally
-        {
-            NativeMethods.operator_info_free(result.Ptr);
-        }
+        var payload = Unsafe.Read<OpenDALOperatorInfo>((void*)ptr);
+        return new OperatorInfo(
+            Utilities.ReadUtf8(payload.Scheme),
+            Utilities.ReadUtf8(payload.Root),
+            Utilities.ReadUtf8(payload.Name),
+            payload.FullCapability,
+            payload.NativeCapability);
     }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native payload for operator metadata returned by <c>operator_info_get</c>.
+/// </summary>
+/// <remarks>
+/// String fields are unmanaged UTF-8 pointers allocated by native code and are
+/// released together via <c>operator_info_free</c>.
+/// </remarks>
+internal struct OpenDALOperatorInfo
+{
+    /// <summary>
+    /// Backend scheme name pointer.
+    /// </summary>
+    public IntPtr Scheme;
+
+    /// <summary>
+    /// Backend root path pointer.
+    /// </summary>
+    public IntPtr Root;
+
+    /// <summary>
+    /// Backend display name pointer.
+    /// </summary>
+    public IntPtr Name;
+
+    /// <summary>
+    /// Full capability payload.
+    /// </summary>
+    public Capability FullCapability;
+
+    /// <summary>
+    /// Native capability payload.
+    /// </summary>
+    public Capability NativeCapability;
 }

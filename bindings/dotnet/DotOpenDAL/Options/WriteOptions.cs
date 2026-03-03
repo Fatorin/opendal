@@ -48,12 +48,12 @@ public sealed class WriteOptions : IOptions
 
     public IReadOnlyDictionary<string, string>? UserMetadata { get; init; }
 
-    public IReadOnlyDictionary<string, string> ToNativeOptions()
+    public NativeOptionsHandle BuildNativeOptionsHandle()
     {
         OptionValidators.RequireGreaterThanZero(Concurrent, nameof(Concurrent));
         OptionValidators.RequireNullableGreaterThanZero(Chunk, nameof(Chunk));
 
-        return new NativeOptionsBuilder()
+        var nativeOptions = new NativeOptionsBuilder()
             .AddBoolTrue("append", Append)
             .AddString("cache_control", CacheControl)
             .AddString("content_type", ContentType)
@@ -66,5 +66,10 @@ public sealed class WriteOptions : IOptions
             .AddNullableInt64("chunk", Chunk)
             .AddPrefixedEntries("user_metadata.", UserMetadata)
             .Build();
+
+        return NativeOptionsBuilder.BuildNativeOptionsHandle(
+            nativeOptions,
+            NativeMethods.write_option_build,
+            NativeMethods.write_option_free);
     }
 }

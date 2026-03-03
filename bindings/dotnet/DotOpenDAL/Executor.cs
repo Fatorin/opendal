@@ -50,12 +50,20 @@ public sealed class Executor : SafeHandle
         }
 
         var result = NativeMethods.executor_create((nuint)threads);
-        if (result.Ptr == IntPtr.Zero)
-        {
-            throw new OpenDALException(result.Error);
-        }
 
-        return result.Ptr;
+        try
+        {
+            if (result.Ptr == IntPtr.Zero)
+            {
+                throw new OpenDALException(result.Error);
+            }
+
+            return result.Ptr;
+        }
+        finally
+        {
+            result.Release();
+        }
     }
 
     /// <summary>

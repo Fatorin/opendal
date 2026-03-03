@@ -25,19 +25,35 @@ namespace DotOpenDAL;
 /// <summary>
 /// Result wrapper for operations that only return success or error.
 /// </summary>
-public struct OpenDALResult
+public struct OpenDALResult : IAsyncCallbackResult<bool>
 {
     /// <summary>
     /// Error details for the operation.
     /// </summary>
     public OpenDALError Error;
+
+    public readonly void Release()
+    {
+        NativeMethods.opendal_result_release(this);
+    }
+
+    public readonly OpenDALError GetError()
+    {
+        return Error;
+    }
+
+    public readonly bool ToValue()
+    {
+        return Error.IsError;
+    }
+
 }
 
 [StructLayout(LayoutKind.Sequential)]
 /// <summary>
-/// Result wrapper for operations that return a native pointer payload.
+/// Result wrapper for operations that return an operator pointer payload.
 /// </summary>
-internal struct OpenDALPointerResult
+internal struct OpenDALOperatorResult
 {
     /// <summary>
     /// Native pointer payload on success.
@@ -48,13 +64,129 @@ internal struct OpenDALPointerResult
     /// Error details for the operation.
     /// </summary>
     public OpenDALError Error;
+
+    public readonly void Release()
+    {
+        NativeMethods.opendal_operator_result_release(this);
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Result wrapper for operations that return an options pointer payload.
+/// </summary>
+internal struct OpenDALOptionsResult
+{
+    public IntPtr Ptr;
+
+    public OpenDALError Error;
+
+    public readonly void Release()
+    {
+        NativeMethods.opendal_options_result_release(this);
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Result wrapper for operations that return an executor pointer payload.
+/// </summary>
+internal struct OpenDALExecutorResult
+{
+    public IntPtr Ptr;
+
+    public OpenDALError Error;
+
+    public readonly void Release()
+    {
+        NativeMethods.opendal_executor_result_release(this);
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Result wrapper for operations that return an operator info payload.
+/// </summary>
+internal struct OpenDALOperatorInfoResult
+    : IAsyncCallbackResult<OperatorInfo>
+{
+    public IntPtr Ptr;
+
+    public OpenDALError Error;
+
+    public readonly void Release()
+    {
+        NativeMethods.opendal_operator_info_result_release(this);
+    }
+
+    public readonly OpenDALError GetError()
+    {
+        return Error;
+    }
+
+    public readonly OperatorInfo ToValue()
+    {
+        return OperatorInfo.FromNativePointer(Ptr);
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Result wrapper for operations that return a metadata payload.
+/// </summary>
+internal struct OpenDALMetadataResult : IAsyncCallbackResult<Metadata>
+{
+    public IntPtr Ptr;
+
+    public OpenDALError Error;
+
+    public readonly void Release()
+    {
+        NativeMethods.opendal_metadata_result_release(this);
+    }
+
+    public readonly OpenDALError GetError()
+    {
+        return Error;
+    }
+
+    public readonly Metadata ToValue()
+    {
+        return Metadata.FromNativePointer(Ptr);
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Result wrapper for operations that return an entry list payload.
+/// </summary>
+internal struct OpenDALEntryListResult : IAsyncCallbackResult<IReadOnlyList<Entry>>
+{
+    public IntPtr Ptr;
+
+    public OpenDALError Error;
+
+    public readonly void Release()
+    {
+        NativeMethods.opendal_entry_list_result_release(this);
+    }
+
+    public readonly OpenDALError GetError()
+    {
+        return Error;
+    }
+
+    public readonly IReadOnlyList<Entry> ToValue()
+    {
+        return Entry.FromNativePointer(Ptr);
+    }
 }
 
 [StructLayout(LayoutKind.Sequential)]
 /// <summary>
 /// Result wrapper for operations that return a byte buffer payload.
 /// </summary>
-internal struct OpenDALByteBufferResult
+internal struct OpenDALReadResult : IAsyncCallbackResult<byte[]>
 {
     /// <summary>
     /// Byte buffer payload on success.
@@ -65,93 +197,19 @@ internal struct OpenDALByteBufferResult
     /// Error details for the operation.
     /// </summary>
     public OpenDALError Error;
-}
 
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native payload for metadata returned by stat operations.
-/// </summary>
-internal struct OpenDALMetadata
-{
-    public int Mode;
+    public readonly void Release()
+    {
+        NativeMethods.opendal_read_result_release(this);
+    }
 
-    public ulong ContentLength;
+    public readonly OpenDALError GetError()
+    {
+        return Error;
+    }
 
-    public IntPtr ContentDisposition;
-
-    public IntPtr ContentMd5;
-
-    public IntPtr ContentType;
-
-    public IntPtr ContentEncoding;
-
-    public IntPtr CacheControl;
-
-    public IntPtr ETag;
-
-    public byte LastModifiedHasValue;
-
-    public long LastModifiedSecond;
-
-    public int LastModifiedNanosecond;
-
-    public IntPtr Version;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native entry payload used by list operations.
-/// </summary>
-internal struct OpenDALEntry
-{
-    public IntPtr Path;
-
-    public IntPtr Metadata;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native list payload that points to an array of entry pointers.
-/// </summary>
-internal struct OpenDALEntryList
-{
-    public IntPtr Entries;
-
-    public nuint Len;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native payload for operator metadata returned by <c>operator_info_get</c>.
-/// </summary>
-/// <remarks>
-/// String fields are unmanaged UTF-8 pointers allocated by native code and are
-/// released together via <c>operator_info_free</c>.
-/// </remarks>
-internal struct OpenDALOperatorInfo
-{
-    /// <summary>
-    /// Backend scheme name pointer.
-    /// </summary>
-    public IntPtr Scheme;
-
-    /// <summary>
-    /// Backend root path pointer.
-    /// </summary>
-    public IntPtr Root;
-
-    /// <summary>
-    /// Backend display name pointer.
-    /// </summary>
-    public IntPtr Name;
-
-    /// <summary>
-    /// Full capability payload.
-    /// </summary>
-    public Capability FullCapability;
-
-    /// <summary>
-    /// Native capability payload.
-    /// </summary>
-    public Capability NativeCapability;
+    public readonly byte[] ToValue()
+    {
+        return Buffer.ToManagedBytes();
+    }
 }

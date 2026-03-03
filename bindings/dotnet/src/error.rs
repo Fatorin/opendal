@@ -29,7 +29,7 @@ pub struct OpenDALError {
     pub code: i32,
     /// Heap-allocated UTF-8 message created by Rust.
     ///
-    /// The receiver must call `message_free` to release it when non-null.
+    /// The message is released by the corresponding FFI result release API.
     pub message: *mut c_char,
 }
 

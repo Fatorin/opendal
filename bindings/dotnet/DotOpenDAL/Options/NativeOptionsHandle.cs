@@ -17,12 +17,32 @@
  * under the License.
  */
 
-namespace DotOpenDAL.Options.Abstractions;
+using System.Runtime.InteropServices;
 
-/// <summary>
-/// Represents operation options that can build native option payload handles.
-/// </summary>
-public interface IOptions
+namespace DotOpenDAL.Options;
+
+public sealed class NativeOptionsHandle : SafeHandle
 {
-    NativeOptionsHandle BuildNativeOptionsHandle();
+    private readonly Action<IntPtr> release;
+
+    public NativeOptionsHandle(IntPtr ptr, Action<IntPtr> release)
+        : base(IntPtr.Zero, true)
+    {
+        this.release = release;
+        SetHandle(ptr);
+    }
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
+
+    protected override bool ReleaseHandle()
+    {
+        if (IsInvalid)
+        {
+            return true;
+        }
+
+        release(handle);
+        handle = IntPtr.Zero;
+        return true;
+    }
 }

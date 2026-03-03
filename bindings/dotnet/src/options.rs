@@ -17,12 +17,85 @@
 
 use std::collections::HashMap;
 
+use opendal::raw::Timestamp;
+
 use crate::error::OpenDALError;
 use crate::validators::prelude::{
-    parse_bool, parse_string, parse_timestamp, parse_u64, parse_usize,
     validate_list_limit, validate_read_chunk, validate_read_concurrent, validate_read_gap,
     validate_read_range_end, validate_write_chunk, validate_write_concurrent,
 };
+
+#[derive(Default, Clone)]
+pub struct OpendalConstructorOptions {
+    values: HashMap<String, String>,
+}
+
+impl OpendalConstructorOptions {
+    pub fn from_values(values: HashMap<String, String>) -> Self {
+        Self { values }
+    }
+
+    pub fn into_values(self) -> HashMap<String, String> {
+        self.values
+    }
+}
+
+fn parse_bool(values: &HashMap<String, String>, key: &str) -> Result<Option<bool>, OpenDALError> {
+    let Some(raw) = values.get(key) else {
+        return Ok(None);
+    };
+
+    match raw.to_ascii_lowercase().as_str() {
+        "true" | "1" => Ok(Some(true)),
+        "false" | "0" => Ok(Some(false)),
+        _ => Err(crate::utils::config_invalid_error(format!(
+            "invalid boolean value for {key}: {raw}"
+        ))),
+    }
+}
+
+fn parse_usize(values: &HashMap<String, String>, key: &str) -> Result<Option<usize>, OpenDALError> {
+    let Some(raw) = values.get(key) else {
+        return Ok(None);
+    };
+
+    raw.parse::<usize>().map(Some).map_err(|err| {
+        crate::utils::config_invalid_error(format!("invalid usize value for {key}: {raw}, {err}"))
+    })
+}
+
+fn parse_u64(values: &HashMap<String, String>, key: &str) -> Result<Option<u64>, OpenDALError> {
+    let Some(raw) = values.get(key) else {
+        return Ok(None);
+    };
+
+    raw.parse::<u64>().map(Some).map_err(|err| {
+        crate::utils::config_invalid_error(format!("invalid u64 value for {key}: {raw}, {err}"))
+    })
+}
+
+fn parse_timestamp(
+    values: &HashMap<String, String>,
+    key: &str,
+) -> Result<Option<Timestamp>, OpenDALError> {
+    let Some(raw) = values.get(key) else {
+        return Ok(None);
+    };
+
+    let millis = raw.parse::<i64>().map_err(|err| {
+        crate::utils::config_invalid_error(format!(
+            "invalid timestamp milliseconds for {key}: {raw}, {err}"
+        ))
+    })?;
+
+    Timestamp::from_millisecond(millis)
+        .map(Some)
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+fn parse_string(values: &HashMap<String, String>, key: &str) -> Option<String> {
+    values.get(key).cloned()
+}
 
 pub fn parse_read_options(
     values: &HashMap<String, String>,

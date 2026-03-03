@@ -19,7 +19,7 @@
 /// FFI-safe representation of a Rust `Vec<u8>` buffer.
 ///
 /// The buffer ownership is transferred to the caller and must be released by
-/// calling `buffer_free(data, len, capacity)` exactly once.
+/// calling `opendal_read_result_release` exactly once.
 pub struct ByteBuffer {
     /// Pointer to the start of the allocated bytes.
     pub data: *mut u8,
@@ -41,7 +41,8 @@ impl ByteBuffer {
 
     /// Convert a vector into a raw FFI buffer without copying.
     ///
-    /// The returned memory must be released by the C# side via `buffer_free`.
+    /// The returned memory must be released by the C# side via
+    /// `opendal_read_result_release`.
     pub fn from_vec(mut value: Vec<u8>) -> Self {
         if value.is_empty() {
             return Self::empty();

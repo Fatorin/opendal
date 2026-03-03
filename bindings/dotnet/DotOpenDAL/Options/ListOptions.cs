@@ -36,16 +36,21 @@ public sealed class ListOptions : IOptions
 
     public bool Deleted { get; init; }
 
-    public IReadOnlyDictionary<string, string> ToNativeOptions()
+    public NativeOptionsHandle BuildNativeOptionsHandle()
     {
         OptionValidators.RequireNullableGreaterThanZero(Limit, nameof(Limit));
 
-        return new NativeOptionsBuilder()
+        var nativeOptions = new NativeOptionsBuilder()
             .AddBoolTrue("recursive", Recursive)
             .AddNullableInt64("limit", Limit)
             .AddString("start_after", StartAfter)
             .AddBoolTrue("versions", Versions)
             .AddBoolTrue("deleted", Deleted)
             .Build();
+
+        return NativeOptionsBuilder.BuildNativeOptionsHandle(
+            nativeOptions,
+            NativeMethods.list_option_build,
+            NativeMethods.list_option_free);
     }
 }

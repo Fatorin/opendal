@@ -42,9 +42,9 @@ public sealed class StatOptions : IOptions
 
     public string? OverrideContentDisposition { get; init; }
 
-    public IReadOnlyDictionary<string, string> ToNativeOptions()
+    public NativeOptionsHandle BuildNativeOptionsHandle()
     {
-        return new NativeOptionsBuilder()
+        var nativeOptions = new NativeOptionsBuilder()
             .AddString("version", Version)
             .AddString("if_match", IfMatch)
             .AddString("if_none_match", IfNoneMatch)
@@ -54,5 +54,10 @@ public sealed class StatOptions : IOptions
             .AddString("override_cache_control", OverrideCacheControl)
             .AddString("override_content_disposition", OverrideContentDisposition)
             .Build();
+
+        return NativeOptionsBuilder.BuildNativeOptionsHandle(
+            nativeOptions,
+            NativeMethods.stat_option_build,
+            NativeMethods.stat_option_free);
     }
 }

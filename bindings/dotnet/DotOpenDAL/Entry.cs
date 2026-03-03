@@ -18,6 +18,7 @@
  */
 
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace DotOpenDAL;
 
@@ -36,43 +37,53 @@ public sealed class Entry
 
     public Metadata Metadata { get; }
 
-    internal static IReadOnlyList<Entry> FromNativePointer(IntPtr ptr)
+    internal static unsafe IReadOnlyList<Entry> FromNativePointer(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero)
         {
             return Array.Empty<Entry>();
         }
 
-        var payload = Marshal.PtrToStructure<OpenDALEntryList>(ptr);
+        var payload = Unsafe.Read<OpenDALEntryList>((void*)ptr);
         var count = checked((int)payload.Len);
         var results = new List<Entry>(count);
 
-        try
+        if (payload.Entries == IntPtr.Zero)
         {
-            for (var index = 0; index < count; index++)
-            {
-                var entryPtr = Marshal.ReadIntPtr(payload.Entries, index * IntPtr.Size);
-                if (entryPtr == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var entryPayload = Marshal.PtrToStructure<OpenDALEntry>(entryPtr);
-                if (entryPayload.Metadata == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var path = Utilities.ReadUtf8(entryPayload.Path);
-                var metadataPayload = Marshal.PtrToStructure<OpenDALMetadata>(entryPayload.Metadata);
-                results.Add(new Entry(path, Metadata.FromNativePayload(metadataPayload)));
-            }
-
             return results;
         }
-        finally
+
+        var entryPointers = new ReadOnlySpan<IntPtr>((void*)payload.Entries, count);
+        for (var index = 0; index < count; index++)
         {
-            NativeMethods.entry_list_free(ptr);
+            var entryPtr = entryPointers[index];
+            if (entryPtr == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            var entryPayload = Unsafe.Read<OpenDALEntry>((void*)entryPtr);
+            if (entryPayload.Metadata == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            var path = Utilities.ReadUtf8(entryPayload.Path);
+            var metadataPayload = Unsafe.Read<OpenDALMetadata>((void*)entryPayload.Metadata);
+            results.Add(new Entry(path, Metadata.FromNativePayload(metadataPayload)));
         }
+
+        return results;
     }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native list payload that points to an array of entry pointers.
+/// </summary>
+internal struct OpenDALEntryList
+{
+    public IntPtr Entries;
+
+    public nuint Len;
 }

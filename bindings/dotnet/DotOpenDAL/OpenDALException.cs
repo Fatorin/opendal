@@ -33,7 +33,7 @@ public class OpenDALException : Exception
     /// Initializes a new exception from a native OpenDAL error payload.
     /// </summary>
     /// <param name="error">Error payload returned by the native binding.</param>
-    public OpenDALException(OpenDALError error) : base(error.GetErrorMessage())
+    public OpenDALException(OpenDALError error) : base(Utilities.ReadUtf8(error.Message))
     {
         if (!TryParse(error.Code, out var parsed))
         {

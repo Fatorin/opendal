@@ -18,6 +18,7 @@
  */
 
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace DotOpenDAL;
 
@@ -84,23 +85,15 @@ public sealed class Metadata
 
     public bool IsDir => Mode == EntryMode.Dir;
 
-    internal static Metadata FromNativePointer(IntPtr ptr)
+    internal static unsafe Metadata FromNativePointer(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero)
         {
             throw new InvalidOperationException("stat returned null metadata pointer");
         }
 
-        var payload = Marshal.PtrToStructure<OpenDALMetadata>(ptr);
-
-        try
-        {
-            return FromNativePayload(payload);
-        }
-        finally
-        {
-            NativeMethods.metadata_free(ptr);
-        }
+        var payload = Unsafe.Read<OpenDALMetadata>((void*)ptr);
+        return FromNativePayload(payload);
     }
 
     internal static Metadata FromNativePayload(OpenDALMetadata payload)
@@ -136,4 +129,46 @@ public sealed class Metadata
             lastModified,
             ReadNullableUtf8(payload.Version));
     }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native entry payload used by list operations.
+/// </summary>
+internal struct OpenDALEntry
+{
+    public IntPtr Path;
+
+    public IntPtr Metadata;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+/// <summary>
+/// Native payload for metadata returned by stat operations.
+/// </summary>
+internal struct OpenDALMetadata
+{
+    public int Mode;
+
+    public ulong ContentLength;
+
+    public IntPtr ContentDisposition;
+
+    public IntPtr ContentMd5;
+
+    public IntPtr ContentType;
+
+    public IntPtr ContentEncoding;
+
+    public IntPtr CacheControl;
+
+    public IntPtr ETag;
+
+    public byte LastModifiedHasValue;
+
+    public long LastModifiedSecond;
+
+    public int LastModifiedNanosecond;
+
+    public IntPtr Version;
 }

@@ -17,7 +17,11 @@
  * under the License.
  */
 
+using System.Runtime.InteropServices;
+
 namespace DotOpenDAL.Options;
+
+internal delegate OpenDALOptionsResult NativeBuildOptionsDelegate(string[] keys, string[] values, nuint len);
 
 /// <summary>
 /// Builder that incrementally collects native key/value options.
@@ -128,5 +132,40 @@ internal sealed class NativeOptionsBuilder
     public IReadOnlyDictionary<string, string> Build()
     {
         return options;
+    }
+
+    public static NativeOptionsHandle BuildNativeOptionsHandle(
+        IReadOnlyDictionary<string, string> options,
+        NativeBuildOptionsDelegate build,
+        Action<IntPtr> release)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var keys = new string[options.Count];
+        var values = new string[options.Count];
+        var index = 0;
+
+        foreach (var option in options)
+        {
+            keys[index] = option.Key;
+            values[index] = option.Value;
+            index++;
+        }
+
+        var result = build(keys, values, (nuint)options.Count);
+
+        try
+        {
+            if (result.Ptr == IntPtr.Zero)
+            {
+                throw new OpenDALException(result.Error);
+            }
+
+            return new NativeOptionsHandle(result.Ptr, release);
+        }
+        finally
+        {
+            result.Release();
+        }
     }
 }

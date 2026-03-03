@@ -51,11 +51,10 @@ internal static class AsyncStateRegistry
         AsyncStates.TryRemove(context, out _);
     }
 
-    public static bool TryTake<TState>(IntPtr context, [NotNullWhen(true)] out TState? state) where TState : class
+    public static bool TryTake<TState>(long context, [NotNullWhen(true)] out TState? state) where TState : class
     {
         state = null;
-        var key = context.ToInt64();
-        if (!AsyncStates.TryRemove(key, out var value))
+        if (!AsyncStates.TryRemove(context, out var value))
         {
             return false;
         }
@@ -93,4 +92,13 @@ public sealed class AsyncState<T>
             current.Completion.TrySetCanceled();
         }, this);
     }
+}
+
+internal interface IAsyncCallbackResult<out TOutput>
+{
+    OpenDALError GetError();
+
+    TOutput ToValue();
+
+    void Release();
 }

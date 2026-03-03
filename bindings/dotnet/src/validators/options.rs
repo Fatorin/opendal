@@ -17,10 +17,6 @@
 
 //! Validators for operation option payloads.
 
-use std::collections::HashMap;
-
-use opendal::raw::Timestamp;
-
 use crate::error::{ErrorCode, OpenDALError};
 
 pub fn validate_read_range_end(offset: u64, length: Option<u64>) -> Result<Option<u64>, OpenDALError> {
@@ -102,67 +98,4 @@ pub fn validate_list_limit(limit: usize) -> Result<(), OpenDALError> {
 	}
 
 	Ok(())
-}
-
-pub fn parse_bool(values: &HashMap<String, String>, key: &str) -> Result<Option<bool>, OpenDALError> {
-	let Some(raw) = values.get(key) else {
-		return Ok(None);
-	};
-
-	match raw.to_ascii_lowercase().as_str() {
-		"true" | "1" => Ok(Some(true)),
-		"false" | "0" => Ok(Some(false)),
-		_ => Err(OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			format!("invalid boolean value for {key}: {raw}"),
-		)),
-	}
-}
-
-pub fn parse_usize(values: &HashMap<String, String>, key: &str) -> Result<Option<usize>, OpenDALError> {
-	let Some(raw) = values.get(key) else {
-		return Ok(None);
-	};
-
-	raw.parse::<usize>().map(Some).map_err(|err| {
-		OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			format!("invalid usize value for {key}: {raw}, {err}"),
-		)
-	})
-}
-
-pub fn parse_u64(values: &HashMap<String, String>, key: &str) -> Result<Option<u64>, OpenDALError> {
-	let Some(raw) = values.get(key) else {
-		return Ok(None);
-	};
-
-	raw.parse::<u64>().map(Some).map_err(|err| {
-		OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			format!("invalid u64 value for {key}: {raw}, {err}"),
-		)
-	})
-}
-
-pub fn parse_timestamp(
-	values: &HashMap<String, String>,
-	key: &str,
-) -> Result<Option<Timestamp>, OpenDALError> {
-	let Some(raw) = values.get(key) else {
-		return Ok(None);
-	};
-
-	let millis = raw.parse::<i64>().map_err(|err| {
-		OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			format!("invalid timestamp milliseconds for {key}: {raw}, {err}"),
-		)
-	})?;
-
-	Timestamp::from_millisecond(millis).map(Some).map_err(OpenDALError::from_opendal_error)
-}
-
-pub fn parse_string(values: &HashMap<String, String>, key: &str) -> Option<String> {
-	values.get(key).cloned()
 }

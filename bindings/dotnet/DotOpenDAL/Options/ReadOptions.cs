@@ -52,7 +52,7 @@ public sealed class ReadOptions : IOptions
 
     public string? OverrideContentDisposition { get; init; }
 
-    public IReadOnlyDictionary<string, string> ToNativeOptions()
+    public NativeOptionsHandle BuildNativeOptionsHandle()
     {
         OptionValidators.RequireGreaterThanOrEqualZero(Offset, nameof(Offset));
         OptionValidators.RequireNullableGreaterThanOrEqualZero(Length, nameof(Length));
@@ -60,7 +60,7 @@ public sealed class ReadOptions : IOptions
         OptionValidators.RequireNullableGreaterThanZero(Chunk, nameof(Chunk));
         OptionValidators.RequireNullableGreaterThanZero(Gap, nameof(Gap));
 
-        return new NativeOptionsBuilder()
+        var nativeOptions = new NativeOptionsBuilder()
             .AddInt64IfNotDefault("offset", Offset, 0)
             .AddNullableInt64("length", Length)
             .AddString("version", Version)
@@ -75,5 +75,10 @@ public sealed class ReadOptions : IOptions
             .AddString("override_cache_control", OverrideCacheControl)
             .AddString("override_content_disposition", OverrideContentDisposition)
             .Build();
+
+        return NativeOptionsBuilder.BuildNativeOptionsHandle(
+            nativeOptions,
+            NativeMethods.read_option_build,
+            NativeMethods.read_option_free);
     }
 }
