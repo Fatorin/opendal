@@ -22,6 +22,7 @@ use crate::entry::entry_list_free;
 use crate::error::OpenDALError;
 use crate::metadata::metadata_free;
 use crate::operator::operator_info_free;
+use crate::presign::presigned_request_free;
 
 #[repr(C)]
 /// Result for operations that only report success or failure.
@@ -77,6 +78,14 @@ pub struct OpendalReadResult {
     pub buffer: ByteBuffer,
     pub error: OpenDALError,
 }
+
+#[repr(C)]
+/// Result for operations returning a presigned request payload pointer.
+pub struct OpendalPresignedRequestResult {
+    pub ptr: *mut c_void,
+    pub error: OpenDALError,
+}
+
 
 macro_rules! define_result {
     ($result_ty:ident) => {
@@ -158,6 +167,12 @@ define_result!(
     OpendalReadResult,
     field = buffer: ByteBuffer,
     error_value = ByteBuffer::empty()
+);
+
+define_result!(
+    OpendalPresignedRequestResult,
+    field = ptr: *mut c_void,
+    error_value = std::ptr::null_mut()
 );
 
 fn release_error_message(error: &mut OpenDALError) {
@@ -252,6 +267,27 @@ pub extern "C" fn opendal_read_result_release(mut result: OpendalReadResult) {
                 result.buffer.len,
                 result.buffer.capacity,
             );
+        }
+    }
+
+    release_error_message(&mut result.error);
+}
+
+/// Release a presigned-request result payload and its error message.
+///
+/// This function is idempotent for null payload pointers.
+/// # Safety
+///
+/// - `result.ptr`, when non-null, must come from presign-producing APIs in
+///   this crate.
+/// - The payload pointer must not be used after this call.
+#[unsafe(no_mangle)]
+pub extern "C" fn opendal_presigned_request_result_release(
+    mut result: OpendalPresignedRequestResult,
+) {
+    if !result.ptr.is_null() {
+        unsafe {
+            presigned_request_free(result.ptr.cast());
         }
     }
 

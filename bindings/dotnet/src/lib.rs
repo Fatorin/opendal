@@ -29,6 +29,7 @@ mod metadata;
 mod operator;
 mod operator_info;
 mod options;
+mod presign;
 mod result;
 mod utils;
 mod validators;

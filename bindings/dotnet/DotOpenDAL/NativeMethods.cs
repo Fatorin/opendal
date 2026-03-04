@@ -380,6 +380,104 @@ internal partial class NativeMethods
 
     #endregion
 
+    #region Presign
+
+    [LibraryImport(__DllName, EntryPoint = "operator_presign_read_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_presign_read_async(
+        Operator op,
+        IntPtr executor,
+        string path,
+        ulong expireNanos,
+        delegate* unmanaged[Cdecl]<long, OpenDALPresignedRequestResult, void> callback,
+        long context
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_presign_write_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_presign_write_async(
+        Operator op,
+        IntPtr executor,
+        string path,
+        ulong expireNanos,
+        delegate* unmanaged[Cdecl]<long, OpenDALPresignedRequestResult, void> callback,
+        long context
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_presign_stat_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_presign_stat_async(
+        Operator op,
+        IntPtr executor,
+        string path,
+        ulong expireNanos,
+        delegate* unmanaged[Cdecl]<long, OpenDALPresignedRequestResult, void> callback,
+        long context
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_presign_delete_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_presign_delete_async(
+        Operator op,
+        IntPtr executor,
+        string path,
+        ulong expireNanos,
+        delegate* unmanaged[Cdecl]<long, OpenDALPresignedRequestResult, void> callback,
+        long context
+    );
+
+    #endregion
+
+    #region Streams
+
+    [LibraryImport(__DllName, EntryPoint = "operator_input_stream_create", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALOperatorResult operator_input_stream_create(
+        Operator op,
+        IntPtr executor,
+        string path,
+        IntPtr options
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_input_stream_read_next")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALReadResult operator_input_stream_read_next(IntPtr stream);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_input_stream_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void operator_input_stream_free(IntPtr stream);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_output_stream_create", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALOperatorResult operator_output_stream_create(
+        Operator op,
+        IntPtr executor,
+        string path,
+        IntPtr options
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_output_stream_write")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_output_stream_write(
+        IntPtr stream,
+        [In] byte[] data,
+        nuint len
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_output_stream_flush")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_output_stream_flush(IntPtr stream);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_output_stream_close")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_output_stream_close(IntPtr stream);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_output_stream_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void operator_output_stream_free(IntPtr stream);
+
+    #endregion
+
     #endregion
 
     #region Executor
@@ -415,6 +513,10 @@ internal partial class NativeMethods
     [LibraryImport(__DllName, EntryPoint = "opendal_read_result_release")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial void opendal_read_result_release(OpenDALReadResult result);
+
+    [LibraryImport(__DllName, EntryPoint = "opendal_presigned_request_result_release")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void opendal_presigned_request_result_release(OpenDALPresignedRequestResult result);
 
     #endregion
 

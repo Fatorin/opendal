@@ -596,4 +596,103 @@ public class MemoryOperatorTest
         var result = await op.ReadAsync("delete-idempotent-async");
         Assert.Equal("ok", System.Text.Encoding.UTF8.GetString(result));
     }
+
+    [Fact]
+    public void OpenReadWriteStream_RoundTripsSuccessfully()
+    {
+        using var op = new Operator("memory");
+        var content = System.Text.Encoding.UTF8.GetBytes("stream-content");
+
+        using (var output = op.OpenWriteStream("stream.txt"))
+        {
+            output.Write(content, 0, content.Length);
+            output.Flush();
+        }
+
+        using var input = op.OpenReadStream("stream.txt");
+        var buffer = new byte[content.Length];
+        var read = input.Read(buffer, 0, buffer.Length);
+
+        Assert.Equal(content.Length, read);
+        Assert.Equal(content, buffer);
+        Assert.Equal(0, input.Read(buffer, 0, buffer.Length));
+    }
+
+    [Fact]
+    public void OpenReadStream_WithReadOptionsRange_ReadsSelectedSlice()
+    {
+        using var op = new Operator("memory");
+        op.Write("stream-range.txt", System.Text.Encoding.UTF8.GetBytes("0123456789"));
+
+        using var input = op.OpenReadStream("stream-range.txt", new ReadOptions
+        {
+            Offset = 3,
+            Length = 4,
+        });
+
+        var buffer = new byte[8];
+        var read = input.Read(buffer, 0, buffer.Length);
+
+        Assert.Equal(4, read);
+        Assert.Equal("3456", System.Text.Encoding.UTF8.GetString(buffer, 0, read));
+    }
+
+    [Fact]
+    public async Task OpenReadWriteStream_AsyncMethods_WorkAsExpected()
+    {
+        using var op = new Operator("memory");
+        var content = System.Text.Encoding.UTF8.GetBytes("stream-async-content");
+
+        using (var output = op.OpenWriteStream("stream-async.txt"))
+        {
+            await output.WriteAsync(content, 0, content.Length);
+            await output.FlushAsync();
+        }
+
+        using var input = op.OpenReadStream("stream-async.txt");
+        var buffer = new byte[content.Length];
+        var read = await input.ReadAsync(buffer, 0, buffer.Length);
+
+        Assert.Equal(content.Length, read);
+        Assert.Equal(content, buffer);
+    }
+
+    [Fact]
+    public async Task PresignAsync_RespectsCapabilityFlags()
+    {
+        using var op = new Operator("memory");
+        var capability = op.Info.FullCapability;
+        var expiration = TimeSpan.FromMinutes(5);
+
+        await AssertPresign(
+            () => op.PresignReadAsync("presign-read", expiration),
+            capability.PresignRead
+        );
+        await AssertPresign(
+            () => op.PresignWriteAsync("presign-write", expiration),
+            capability.PresignWrite
+        );
+        await AssertPresign(
+            () => op.PresignStatAsync("presign-stat", expiration),
+            capability.PresignStat
+        );
+        await AssertPresign(
+            () => op.PresignDeleteAsync("presign-delete", expiration),
+            capability.PresignDelete
+        );
+
+        static async Task AssertPresign(Func<Task<PresignedRequest>> presignAction, bool supported)
+        {
+            if (supported)
+            {
+                var request = await presignAction();
+                Assert.False(string.IsNullOrWhiteSpace(request.Method));
+                Assert.False(string.IsNullOrWhiteSpace(request.Uri));
+                return;
+            }
+
+            var ex = await Assert.ThrowsAsync<OpenDALException>(presignAction);
+            Assert.Equal(ErrorCode.Unsupported, ex.Code);
+        }
+    }
 }

@@ -923,6 +923,244 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
+    /// Creates a presigned read request asynchronously.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="expiration">Presigned request expiration duration.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that resolves with a presigned request.</returns>
+    public Task<PresignedRequest> PresignReadAsync(
+        string path,
+        TimeSpan expiration,
+        CancellationToken cancellationToken = default)
+    {
+        return PresignReadAsync(path, expiration, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a presigned read request asynchronously using the provided executor.
+    /// </summary>
+    public Task<PresignedRequest> PresignReadAsync(
+        string path,
+        TimeSpan expiration,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var expireNanos = Utilities.ToNanoseconds(expiration, nameof(expiration));
+
+        return SubmitAsyncOperation<PresignedRequest>(SubmitPresignReadAsync, cancellationToken);
+
+        OpenDALResult SubmitPresignReadAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_presign_read_async(
+                    this,
+                    executorHandle,
+                    path,
+                    expireNanos,
+                    &OnPresignReadCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a presigned write request asynchronously.
+    /// </summary>
+    public Task<PresignedRequest> PresignWriteAsync(
+        string path,
+        TimeSpan expiration,
+        CancellationToken cancellationToken = default)
+    {
+        return PresignWriteAsync(path, expiration, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a presigned write request asynchronously using the provided executor.
+    /// </summary>
+    public Task<PresignedRequest> PresignWriteAsync(
+        string path,
+        TimeSpan expiration,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var expireNanos = Utilities.ToNanoseconds(expiration, nameof(expiration));
+
+        return SubmitAsyncOperation<PresignedRequest>(SubmitPresignWriteAsync, cancellationToken);
+
+        OpenDALResult SubmitPresignWriteAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_presign_write_async(
+                    this,
+                    executorHandle,
+                    path,
+                    expireNanos,
+                    &OnPresignWriteCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a presigned stat request asynchronously.
+    /// </summary>
+    public Task<PresignedRequest> PresignStatAsync(
+        string path,
+        TimeSpan expiration,
+        CancellationToken cancellationToken = default)
+    {
+        return PresignStatAsync(path, expiration, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a presigned stat request asynchronously using the provided executor.
+    /// </summary>
+    public Task<PresignedRequest> PresignStatAsync(
+        string path,
+        TimeSpan expiration,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var expireNanos = Utilities.ToNanoseconds(expiration, nameof(expiration));
+
+        return SubmitAsyncOperation<PresignedRequest>(SubmitPresignStatAsync, cancellationToken);
+
+        OpenDALResult SubmitPresignStatAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_presign_stat_async(
+                    this,
+                    executorHandle,
+                    path,
+                    expireNanos,
+                    &OnPresignStatCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a presigned delete request asynchronously.
+    /// </summary>
+    public Task<PresignedRequest> PresignDeleteAsync(
+        string path,
+        TimeSpan expiration,
+        CancellationToken cancellationToken = default)
+    {
+        return PresignDeleteAsync(path, expiration, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a presigned delete request asynchronously using the provided executor.
+    /// </summary>
+    public Task<PresignedRequest> PresignDeleteAsync(
+        string path,
+        TimeSpan expiration,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var expireNanos = Utilities.ToNanoseconds(expiration, nameof(expiration));
+
+        return SubmitAsyncOperation<PresignedRequest>(SubmitPresignDeleteAsync, cancellationToken);
+
+        OpenDALResult SubmitPresignDeleteAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_presign_delete_async(
+                    this,
+                    executorHandle,
+                    path,
+                    expireNanos,
+                    &OnPresignDeleteCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens a read stream for the specified path.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="options">Optional read options.</param>
+    /// <param name="executor">Executor used for stream creation, or <see langword="null"/> to use default executor.</param>
+    /// <returns>A readable stream over the given path.</returns>
+    public OperatorInputStream OpenReadStream(
+        string path,
+        ReadOptions? options = null,
+        Executor? executor = null)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        using var nativeOptions = options?.BuildNativeOptionsHandle();
+        var result = NativeMethods.operator_input_stream_create(
+            this,
+            executorHandle,
+            path,
+            GetOptionsHandle(nativeOptions)
+        );
+
+        var streamHandle = ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result);
+        if (streamHandle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("OpenReadStream returned null stream pointer");
+        }
+
+        return new OperatorInputStream(streamHandle);
+    }
+
+    /// <summary>
+    /// Opens a write stream for the specified path.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="options">Optional write options.</param>
+    /// <param name="bufferSize">Buffer size used by the managed write stream.</param>
+    /// <param name="executor">Executor used for stream creation, or <see langword="null"/> to use default executor.</param>
+    /// <returns>A writable stream over the given path.</returns>
+    public OperatorOutputStream OpenWriteStream(
+        string path,
+        WriteOptions? options = null,
+        int bufferSize = OperatorOutputStream.DefaultBufferSize,
+        Executor? executor = null)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        using var nativeOptions = options?.BuildNativeOptionsHandle();
+        var result = NativeMethods.operator_output_stream_create(
+            this,
+            executorHandle,
+            path,
+            GetOptionsHandle(nativeOptions)
+        );
+
+        var streamHandle = ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result);
+        if (streamHandle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("OpenWriteStream returned null stream pointer");
+        }
+
+        return new OperatorOutputStream(streamHandle, bufferSize);
+    }
+
+    /// <summary>
     /// Releases the native operator handle.
     /// </summary>
     /// <returns><see langword="true"/> after the handle has been released.</returns>
@@ -1090,6 +1328,33 @@ public partial class Operator : SafeHandle
         {
             using var nativeOptionsHandle = options?.BuildNativeOptionsHandle();
             var submitResult = submit(context, GetOptionsHandle(nativeOptionsHandle));
+            ThrowIfErrorAndRelease(submitResult);
+            asyncState.BindCancellation(cancellationToken);
+            return asyncState.Completion.Task;
+        }
+        catch
+        {
+            AsyncStateRegistry.Unregister(context);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Submits a native async operation without options and binds it to a managed task completion source.
+    /// </summary>
+    /// <typeparam name="TOutput">Managed task result type.</typeparam>
+    /// <param name="submit">Submission delegate that invokes the native async API.</param>
+    /// <param name="cancellationToken">Cancellation token for managed task observation.</param>
+    /// <returns>A task completed by the corresponding native callback.</returns>
+    internal static Task<TOutput> SubmitAsyncOperation<TOutput>(
+        Func<long, OpenDALResult> submit,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = AsyncStateRegistry.Register<TOutput>(out var asyncState);
+        try
+        {
+            var submitResult = submit(context);
             ThrowIfErrorAndRelease(submitResult);
             asyncState.BindCancellation(cancellationToken);
             return asyncState.Completion.Task;
@@ -1352,6 +1617,42 @@ public partial class Operator : SafeHandle
     private static void OnRemoveAllCompleted(long context, OpenDALResult result)
     {
         CompleteAsyncCallback(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous presign-read operation finishes.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnPresignReadCompleted(long context, OpenDALPresignedRequestResult result)
+    {
+        CompleteAsyncCallback<PresignedRequest, OpenDALPresignedRequestResult>(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous presign-write operation finishes.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnPresignWriteCompleted(long context, OpenDALPresignedRequestResult result)
+    {
+        CompleteAsyncCallback<PresignedRequest, OpenDALPresignedRequestResult>(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous presign-stat operation finishes.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnPresignStatCompleted(long context, OpenDALPresignedRequestResult result)
+    {
+        CompleteAsyncCallback<PresignedRequest, OpenDALPresignedRequestResult>(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous presign-delete operation finishes.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnPresignDeleteCompleted(long context, OpenDALPresignedRequestResult result)
+    {
+        CompleteAsyncCallback<PresignedRequest, OpenDALPresignedRequestResult>(context, result);
     }
 
     #endregion

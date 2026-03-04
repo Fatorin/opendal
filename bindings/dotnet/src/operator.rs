@@ -23,9 +23,11 @@ use crate::{
     metadata::OpendalMetadata,
     operator_info::{OpendalOperatorInfo, into_operator_info},
     options::{parse_list_options, parse_read_options, parse_stat_options, parse_write_options},
+    presign::into_presigned_request_ptr,
     result::{
         OpendalEntryListResult, OpendalMetadataResult, OpendalOperatorInfoResult,
-        OpendalOperatorResult, OpendalOptionsResult, OpendalReadResult, OpendalResult,
+        OpendalOperatorResult, OpendalOptionsResult, OpendalPresignedRequestResult,
+        OpendalReadResult, OpendalResult,
     },
     utils::{collect_options, require_callback, require_cstr, require_data_ptr, require_operator},
     validators::prelude::{
@@ -46,6 +48,7 @@ type WriteCallback = extern "C" fn(context: i64, result: OpendalResult);
 type ReadCallback = extern "C" fn(context: i64, result: OpendalReadResult);
 type StatCallback = extern "C" fn(context: i64, result: OpendalMetadataResult);
 type ListCallback = extern "C" fn(context: i64, result: OpendalEntryListResult);
+type PresignCallback = extern "C" fn(context: i64, result: OpendalPresignedRequestResult);
 
 /// Build constructor options from raw C string key/value arrays.
 ///
@@ -896,6 +899,490 @@ fn operator_remove_all_async_inner(
     });
 
     Ok(())
+}
+
+/// Presign read asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_presign_read_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_presign_read_async_inner(op, executor, path, expire_nanos, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_presign_read_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+    let expire = Duration::from_nanos(expire_nanos);
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .presign_read(&path, expire)
+            .await
+            .map_err(OpenDALError::from_opendal_error)
+            .and_then(into_presigned_request_ptr);
+
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalPresignedRequestResult::ok(value),
+                Err(error) => OpendalPresignedRequestResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Presign write asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_presign_write_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_presign_write_async_inner(op, executor, path, expire_nanos, callback, context)
+    {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_presign_write_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+    let expire = Duration::from_nanos(expire_nanos);
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .presign_write(&path, expire)
+            .await
+            .map_err(OpenDALError::from_opendal_error)
+            .and_then(into_presigned_request_ptr);
+
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalPresignedRequestResult::ok(value),
+                Err(error) => OpendalPresignedRequestResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Presign stat asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_presign_stat_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_presign_stat_async_inner(op, executor, path, expire_nanos, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_presign_stat_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+    let expire = Duration::from_nanos(expire_nanos);
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .presign_stat(&path, expire)
+            .await
+            .map_err(OpenDALError::from_opendal_error)
+            .and_then(into_presigned_request_ptr);
+
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalPresignedRequestResult::ok(value),
+                Err(error) => OpendalPresignedRequestResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Presign delete asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_presign_delete_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_presign_delete_async_inner(op, executor, path, expire_nanos, callback, context)
+    {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_presign_delete_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    expire_nanos: u64,
+    callback: Option<PresignCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+    let expire = Duration::from_nanos(expire_nanos);
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .presign_delete(&path, expire)
+            .await
+            .map_err(OpenDALError::from_opendal_error)
+            .and_then(into_presigned_request_ptr);
+
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalPresignedRequestResult::ok(value),
+                Err(error) => OpendalPresignedRequestResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Create an input stream for `path` with read options.
+///
+/// Returned pointer must be released by `operator_input_stream_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_input_stream_create(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    options: *const opendal::options::ReadOptions,
+) -> OpendalOperatorResult {
+    match operator_input_stream_create_inner(op, executor, path, options) {
+        Ok(value) => OpendalOperatorResult::ok(value),
+        Err(error) => OpendalOperatorResult::from_error(error),
+    }
+}
+
+fn operator_input_stream_create_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    options: *const opendal::options::ReadOptions,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let options = if options.is_null() {
+        opendal::options::ReadOptions::default()
+    } else {
+        unsafe { (&*options).clone() }
+    };
+
+    let _guard = executor.enter();
+
+    let blocking_op = opendal::blocking::Operator::new(op.clone())
+        .map_err(OpenDALError::from_opendal_error)?;
+    let reader = blocking_op
+        .reader_options(&path, opendal::options::ReaderOptions::default())
+        .map_err(OpenDALError::from_opendal_error)?;
+    let stream = reader
+        .into_bytes_iterator(options.range.to_range())
+        .map_err(OpenDALError::from_opendal_error)?;
+
+    Ok(Box::into_raw(Box::new(stream)) as *mut c_void)
+}
+
+/// Read next bytes chunk from input stream.
+///
+/// Returns an empty buffer when EOF is reached.
+/// # Safety
+///
+/// - `stream` must be a valid pointer returned by `operator_input_stream_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_input_stream_read_next(
+    stream: *mut opendal::blocking::StdBytesIterator,
+) -> OpendalReadResult {
+    match operator_input_stream_read_next_inner(stream) {
+        Ok(buffer) => OpendalReadResult::ok(buffer),
+        Err(error) => OpendalReadResult::from_error(error),
+    }
+}
+
+fn operator_input_stream_read_next_inner(
+    stream: *mut opendal::blocking::StdBytesIterator,
+) -> Result<ByteBuffer, OpenDALError> {
+    if stream.is_null() {
+        return Err(crate::utils::config_invalid_error("input stream pointer is null"));
+    }
+
+    let stream = unsafe { &mut *stream };
+
+    let value = stream
+        .next()
+        .transpose()
+        .map_err(|err| {
+            OpenDALError::from_opendal_error(
+                opendal::Error::new(opendal::ErrorKind::Unexpected, err.to_string()),
+            )
+        })?
+        .map(|v| ByteBuffer::from_vec(v.to_vec()))
+        .unwrap_or_else(ByteBuffer::empty);
+
+    Ok(value)
+}
+
+/// # Safety
+///
+/// - `stream` must be null or a pointer returned by `operator_input_stream_create`.
+/// - Must be called at most once for the same pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_input_stream_free(stream: *mut opendal::blocking::StdBytesIterator) {
+    if stream.is_null() {
+        return;
+    }
+
+    unsafe {
+        drop(Box::from_raw(stream));
+    }
+}
+
+/// Create an output stream for `path` with write options.
+///
+/// Returned pointer must be released by `operator_output_stream_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_output_stream_create(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    options: *const opendal::options::WriteOptions,
+) -> OpendalOperatorResult {
+    match operator_output_stream_create_inner(op, executor, path, options) {
+        Ok(value) => OpendalOperatorResult::ok(value),
+        Err(error) => OpendalOperatorResult::from_error(error),
+    }
+}
+
+fn operator_output_stream_create_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    options: *const opendal::options::WriteOptions,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let options = if options.is_null() {
+        opendal::options::WriteOptions::default()
+    } else {
+        unsafe { (&*options).clone() }
+    };
+
+    let _guard = executor.enter();
+
+    let blocking_op = opendal::blocking::Operator::new(op.clone())
+        .map_err(OpenDALError::from_opendal_error)?;
+    let stream = blocking_op
+        .writer_options(&path, options)
+        .map_err(OpenDALError::from_opendal_error)?;
+
+    Ok(Box::into_raw(Box::new(stream)) as *mut c_void)
+}
+
+/// Write bytes to output stream.
+/// # Safety
+///
+/// - `stream` must be a valid pointer returned by `operator_output_stream_create`.
+/// - When `len > 0`, `data` must be non-null and readable for `len` bytes.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_output_stream_write(
+    stream: *mut opendal::blocking::Writer,
+    data: *const u8,
+    len: usize,
+) -> OpendalResult {
+    match operator_output_stream_write_inner(stream, data, len) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_output_stream_write_inner(
+    stream: *mut opendal::blocking::Writer,
+    data: *const u8,
+    len: usize,
+) -> Result<(), OpenDALError> {
+    if stream.is_null() {
+        return Err(crate::utils::config_invalid_error(
+            "output stream pointer is null",
+        ));
+    }
+    require_data_ptr(data, len)?;
+
+    let stream = unsafe { &mut *stream };
+    let payload = if len == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(data, len) }
+    };
+
+    stream
+        .write(payload)
+        .map(|_| ())
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Flush output stream.
+/// # Safety
+///
+/// - `stream` must be a valid pointer returned by `operator_output_stream_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_output_stream_flush(stream: *mut opendal::blocking::Writer) -> OpendalResult {
+    match operator_output_stream_flush_inner(stream) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_output_stream_flush_inner(stream: *mut opendal::blocking::Writer) -> Result<(), OpenDALError> {
+    if stream.is_null() {
+        return Err(crate::utils::config_invalid_error(
+            "output stream pointer is null",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Close output stream.
+/// # Safety
+///
+/// - `stream` must be a valid pointer returned by `operator_output_stream_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_output_stream_close(stream: *mut opendal::blocking::Writer) -> OpendalResult {
+    match operator_output_stream_close_inner(stream) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_output_stream_close_inner(stream: *mut opendal::blocking::Writer) -> Result<(), OpenDALError> {
+    if stream.is_null() {
+        return Err(crate::utils::config_invalid_error(
+            "output stream pointer is null",
+        ));
+    }
+
+    let stream = unsafe { &mut *stream };
+    stream
+        .close()
+        .map(|_| ())
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// # Safety
+///
+/// - `stream` must be null or a pointer returned by `operator_output_stream_create`.
+/// - Must be called at most once for the same pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_output_stream_free(stream: *mut opendal::blocking::Writer) {
+    if stream.is_null() {
+        return;
+    }
+
+    unsafe {
+        drop(Box::from_raw(stream));
+    }
 }
 
 /// Write bytes to `path` synchronously with options.

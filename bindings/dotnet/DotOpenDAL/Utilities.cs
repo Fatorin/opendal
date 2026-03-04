@@ -27,6 +27,8 @@ namespace DotOpenDAL;
 /// </summary>
 public static class Utilities
 {
+	private const long NanosecondsPerTick = 100;
+
 	/// <summary>
 	/// Decodes an unmanaged UTF-8 message pointer and returns null for null pointers.
 	/// </summary>
@@ -65,5 +67,26 @@ public static class Utilities
 			IFormattable f => f.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,
 			_ => value.ToString() ?? string.Empty,
 		};
+	}
+
+	/// <summary>
+	/// Converts a positive <see cref="TimeSpan"/> into nanoseconds.
+	/// </summary>
+	/// <param name="value">Duration to convert.</param>
+	/// <param name="paramName">Parameter name used in thrown exceptions.</param>
+	/// <returns>Duration in nanoseconds.</returns>
+	/// <exception cref="ArgumentOutOfRangeException">Value is zero or negative.</exception>
+	/// <exception cref="OverflowException">Value exceeds the range of <see cref="ulong"/> nanoseconds.</exception>
+	public static ulong ToNanoseconds(TimeSpan value, string paramName)
+	{
+		if (value <= TimeSpan.Zero)
+		{
+			throw new ArgumentOutOfRangeException(paramName, "Duration must be greater than zero.");
+		}
+
+		checked
+		{
+			return (ulong)(value.Ticks * NanosecondsPerTick);
+		}
 	}
 }
