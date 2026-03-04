@@ -48,11 +48,8 @@ use std::time::Duration;
 /// The callback is provided by the .NET side and must remain valid until
 /// invoked by Rust.
 type WriteCallback = unsafe extern "C" fn(context: i64, result: OpendalResult);
-/// Callback signature for async read completion.
 type ReadCallback = unsafe extern "C" fn(context: i64, result: OpendalReadResult);
-/// Callback signature for async stat completion.
 type StatCallback = unsafe extern "C" fn(context: i64, result: OpendalMetadataResult);
-/// Callback signature for async list completion.
 type ListCallback = unsafe extern "C" fn(context: i64, result: OpendalEntryListResult);
 
 /// Build constructor options from raw C string key/value arrays.
@@ -79,7 +76,6 @@ pub unsafe extern "C" fn constructor_option_build(
     }
 }
 
-/// Release constructor options created by `constructor_option_build`.
 /// # Safety
 ///
 /// - `options` must be null or a pointer returned by
@@ -117,7 +113,6 @@ pub unsafe extern "C" fn read_option_build(
     }
 }
 
-/// Release read options created by `read_option_build`.
 /// # Safety
 ///
 /// - `options` must be null or a pointer returned by `read_option_build`.
@@ -154,7 +149,6 @@ pub unsafe extern "C" fn write_option_build(
     }
 }
 
-/// Release write options created by `write_option_build`.
 /// # Safety
 ///
 /// - `options` must be null or a pointer returned by `write_option_build`.
@@ -191,7 +185,6 @@ pub unsafe extern "C" fn stat_option_build(
     }
 }
 
-/// Release stat options created by `stat_option_build`.
 /// # Safety
 ///
 /// - `options` must be null or a pointer returned by `stat_option_build`.
@@ -228,7 +221,6 @@ pub unsafe extern "C" fn list_option_build(
     }
 }
 
-/// Release list options created by `list_option_build`.
 /// # Safety
 ///
 /// - `options` must be null or a pointer returned by `list_option_build`.
@@ -279,7 +271,6 @@ fn operator_construct_inner(
     Ok(Box::into_raw(Box::new(op)) as *mut c_void)
 }
 
-/// Release an operator created by `operator_construct`.
 /// # Safety
 ///
 /// - `op` must be either null or a pointer returned by `operator_construct`.
@@ -320,7 +311,6 @@ fn operator_info_get_inner(
     Ok(Box::into_raw(Box::new(info)) as *mut c_void)
 }
 
-/// Release an operator info payload created by `operator_info_get`.
 /// # Safety
 ///
 /// - `info` must be either null or a pointer returned by `operator_info_get`.
@@ -391,6 +381,35 @@ fn operator_layer_retry_inner(
     Ok(Box::into_raw(Box::new(op.clone().layer(retry))) as *mut c_void)
 }
 
+/// Create a new operator layered with concurrent-limit behavior.
+///
+/// The current operator is not modified. Returned pointer must be released with
+/// `operator_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_layer_concurrent_limit(
+    op: *const opendal::Operator,
+    permits: usize,
+) -> OpendalOperatorResult {
+    match operator_layer_concurrent_limit_inner(op, permits) {
+        Ok(value) => OpendalOperatorResult::ok(value),
+        Err(error) => OpendalOperatorResult::from_error(error),
+    }
+}
+
+fn operator_layer_concurrent_limit_inner(
+    op: *const opendal::Operator,
+    permits: usize,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    validate_concurrent_limit_options(permits)?;
+
+    let concurrent_limit = opendal::layers::ConcurrentLimitLayer::new(permits);
+    Ok(Box::into_raw(Box::new(op.clone().layer(concurrent_limit))) as *mut c_void)
+}
+
 /// Create a new operator layered with timeout behavior.
 ///
 /// The current operator is not modified. Returned pointer must be released with
@@ -423,35 +442,6 @@ fn operator_layer_timeout_inner(
         .with_io_timeout(Duration::from_nanos(io_timeout_nanos));
 
     Ok(Box::into_raw(Box::new(op.clone().layer(timeout))) as *mut c_void)
-}
-
-/// Create a new operator layered with concurrent-limit behavior.
-///
-/// The current operator is not modified. Returned pointer must be released with
-/// `operator_free`.
-/// # Safety
-///
-/// - `op` must be a valid operator pointer from `operator_construct`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_layer_concurrent_limit(
-    op: *const opendal::Operator,
-    permits: usize,
-) -> OpendalOperatorResult {
-    match operator_layer_concurrent_limit_inner(op, permits) {
-        Ok(value) => OpendalOperatorResult::ok(value),
-        Err(error) => OpendalOperatorResult::from_error(error),
-    }
-}
-
-fn operator_layer_concurrent_limit_inner(
-    op: *const opendal::Operator,
-    permits: usize,
-) -> Result<*mut c_void, OpenDALError> {
-    let op = require_operator(op)?;
-    validate_concurrent_limit_options(permits)?;
-
-    let concurrent_limit = opendal::layers::ConcurrentLimitLayer::new(permits);
-    Ok(Box::into_raw(Box::new(op.clone().layer(concurrent_limit))) as *mut c_void)
 }
 
 /// Write bytes to `path` synchronously with options.
@@ -733,49 +723,6 @@ fn operator_stat_with_options_inner(
     Ok(Box::into_raw(Box::new(OpendalMetadata::from_metadata(metadata))))
 }
 
-/// List entries from `path` synchronously with options.
-///
-/// On success, returned payload must be released with `opendal_entry_list_result_release`.
-/// # Safety
-///
-/// - `op` must be a valid operator pointer from `operator_construct`.
-/// - `path` must be a valid null-terminated UTF-8 string.
-/// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_list_with_options(
-    op: *const opendal::Operator,
-    executor: *const c_void,
-    path: *const c_char,
-    options: *const opendal::options::ListOptions,
-) -> OpendalEntryListResult {
-    match operator_list_with_options_inner(op, executor, path, options) {
-        Ok(value) => OpendalEntryListResult::ok(value),
-        Err(error) => OpendalEntryListResult::from_error(error),
-    }
-}
-
-fn operator_list_with_options_inner(
-    op: *const opendal::Operator,
-    executor: *const c_void,
-    path: *const c_char,
-    options: *const opendal::options::ListOptions,
-) -> Result<*mut c_void, OpenDALError> {
-    let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
-    let path = require_cstr(path, "path")?;
-    let options = if options.is_null() {
-        opendal::options::ListOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
-
-    let entries = executor
-        .block_on(op.list_options(path, options))
-        .map_err(OpenDALError::from_opendal_error)?;
-
-    Ok(into_entry_list_ptr(entries))
-}
-
 /// Stat `path` asynchronously with options.
 ///
 /// The callback is invoked exactly once. On success, callback result must be
@@ -840,6 +787,49 @@ fn operator_stat_with_options_async_inner(
     });
 
     Ok(())
+}
+
+/// List entries from `path` synchronously with options.
+///
+/// On success, returned payload must be released with `opendal_entry_list_result_release`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_list_with_options(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    options: *const opendal::options::ListOptions,
+) -> OpendalEntryListResult {
+    match operator_list_with_options_inner(op, executor, path, options) {
+        Ok(value) => OpendalEntryListResult::ok(value),
+        Err(error) => OpendalEntryListResult::from_error(error),
+    }
+}
+
+fn operator_list_with_options_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    options: *const opendal::options::ListOptions,
+) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = unsafe { executor_or_default(executor) }?;
+    let path = require_cstr(path, "path")?;
+    let options = if options.is_null() {
+        opendal::options::ListOptions::default()
+    } else {
+        unsafe { (&*options).clone() }
+    };
+
+    let entries = executor
+        .block_on(op.list_options(path, options))
+        .map_err(OpenDALError::from_opendal_error)?;
+
+    Ok(into_entry_list_ptr(entries))
 }
 
 /// List entries from `path` asynchronously with options.

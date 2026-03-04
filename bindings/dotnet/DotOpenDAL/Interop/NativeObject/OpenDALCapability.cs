@@ -22,9 +22,6 @@ using System.Runtime.InteropServices;
 namespace DotOpenDAL.Interop.NativeObject;
 
 [StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native capability flags payload returned by operator info APIs.
-/// </summary>
 internal struct OpenDALCapability
 {
     [MarshalAs(UnmanagedType.U1)] internal byte stat;

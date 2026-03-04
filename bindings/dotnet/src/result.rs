@@ -27,70 +27,55 @@ use crate::utils::buffer_free;
 #[repr(C)]
 /// Result for operations that only report success or failure.
 pub struct OpendalResult {
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 
 #[repr(C)]
 /// Result for operations returning an operator handle pointer.
 pub struct OpendalOperatorResult {
-    /// Pointer payload on success, null on error.
     pub ptr: *mut c_void,
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 
 #[repr(C)]
 /// Result for operations returning an options handle pointer.
 pub struct OpendalOptionsResult {
-    /// Pointer payload on success, null on error.
     pub ptr: *mut c_void,
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 
 #[repr(C)]
 /// Result for operations returning an executor handle pointer.
 pub struct OpendalExecutorResult {
-    /// Pointer payload on success, null on error.
     pub ptr: *mut c_void,
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 
 #[repr(C)]
 /// Result for operations returning an operator info payload pointer.
 pub struct OpendalOperatorInfoResult {
-    /// Pointer payload on success, null on error.
     pub ptr: *mut c_void,
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 
 #[repr(C)]
 /// Result for operations returning a metadata payload pointer.
 pub struct OpendalMetadataResult {
-    /// Pointer payload on success, null on error.
     pub ptr: *mut c_void,
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 
 #[repr(C)]
 /// Result for operations returning an entry list payload pointer.
 pub struct OpendalEntryListResult {
-    /// Pointer payload on success, null on error.
     pub ptr: *mut c_void,
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 
 #[repr(C)]
 /// Result for operations returning a byte buffer payload.
 pub struct OpendalReadResult {
-    /// Buffer payload on success.
     pub buffer: ByteBuffer,
-    /// Error information for the operation.
     pub error: OpenDALError,
 }
 

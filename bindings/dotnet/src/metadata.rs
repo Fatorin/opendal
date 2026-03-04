@@ -22,34 +22,21 @@ use crate::utils::into_string_ptr;
 #[repr(C)]
 /// FFI representation of OpenDAL metadata.
 pub struct OpendalMetadata {
-    /// Entry mode: 0 = file, 1 = dir, 2 = unknown.
     pub mode: i32,
-    /// Content length in bytes.
     pub content_length: u64,
-    /// Optional content-disposition header value.
     pub content_disposition: *mut c_char,
-    /// Optional content-md5 header value.
     pub content_md5: *mut c_char,
-    /// Optional content-type header value.
     pub content_type: *mut c_char,
-    /// Optional content-encoding header value.
     pub content_encoding: *mut c_char,
-    /// Optional cache-control header value.
     pub cache_control: *mut c_char,
-    /// Optional entity tag value.
     pub etag: *mut c_char,
-    /// 1 if last-modified exists, otherwise 0.
     pub last_modified_has_value: u8,
-    /// Last-modified unix seconds.
     pub last_modified_second: i64,
-    /// Last-modified nanosecond fraction.
     pub last_modified_nanosecond: i32,
-    /// Optional object version.
     pub version: *mut c_char,
 }
 
 impl OpendalMetadata {
-    /// Convert native OpenDAL metadata into the FFI metadata representation.
     pub fn from_metadata(metadata: opendal::Metadata) -> Self {
         let mode = match metadata.mode() {
             opendal::EntryMode::FILE => 0,

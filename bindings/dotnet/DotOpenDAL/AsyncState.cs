@@ -64,19 +64,10 @@ internal static class AsyncStateRegistry
     }
 }
 
-/// <summary>
-/// State object for a pending asynchronous operation.
-/// </summary>
 public sealed class AsyncState<T>
 {
-    /// <summary>
-    /// Completion source that resolves when the native callback arrives.
-    /// </summary>
     public TaskCompletionSource<T> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>
-    /// Registration used to detach cancellation callbacks when the operation completes.
-    /// </summary>
     public CancellationTokenRegistration CancellationRegistration { get; private set; }
 
     public void BindCancellation(CancellationToken cancellationToken)

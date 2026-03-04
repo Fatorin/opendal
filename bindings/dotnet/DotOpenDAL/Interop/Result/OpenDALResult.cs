@@ -28,23 +28,13 @@ namespace DotOpenDAL.Interop.Result;
 /// </summary>
 public struct OpenDALResult : INativeResult
 {
-    /// <summary>
-    /// Error details for the operation.
-    /// </summary>
     public OpenDALError Error;
 
-    /// <summary>
-    /// Releases native resources referenced by <see cref="Error"/>.
-    /// </summary>
     public readonly void Release()
     {
         NativeMethods.opendal_error_release(Error);
     }
 
-    /// <summary>
-    /// Gets operation error details returned by native code.
-    /// </summary>
-    /// <returns>The native error payload.</returns>
     public readonly OpenDALError GetError()
     {
         return Error;

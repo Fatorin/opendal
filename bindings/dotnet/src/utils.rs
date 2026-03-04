@@ -22,9 +22,6 @@ use crate::capability::Capability;
 use crate::error::{ErrorCode, OpenDALError};
 use crate::operator_info::OpendalOperatorInfo;
 
-/// Convert a C string pointer into `&str`.
-///
-/// Returns `None` when the pointer is null or not valid UTF-8.
 pub fn cstr_to_str<'a>(value: *const c_char) -> Option<&'a str> {
     if value.is_null() {
         return None;
@@ -34,28 +31,23 @@ pub fn cstr_to_str<'a>(value: *const c_char) -> Option<&'a str> {
     cstr.to_str().ok()
 }
 
-/// Build a `ConfigInvalid` error payload for invalid FFI inputs.
 pub fn config_invalid_error(message: impl Into<String>) -> OpenDALError {
     OpenDALError::from_error(ErrorCode::ConfigInvalid, message.into())
 }
 
-/// Build the standard invalid UTF-8 message for a field.
 pub fn invalid_utf8_message(field: &str) -> String {
     format!("{field} is null or invalid UTF-8")
 }
 
-/// Build the standard invalid UTF-8 message for an indexed field.
 pub fn invalid_utf8_message_at(field: &str, index: usize) -> String {
     format!("{field} at index {index} is null or invalid UTF-8")
 }
 
-/// Require a non-null, UTF-8 C string pointer.
 pub fn require_cstr<'a>(value: *const c_char, field: &str) -> Result<&'a str, OpenDALError> {
     cstr_to_str(value)
         .ok_or_else(|| OpenDALError::from_error(ErrorCode::ConfigInvalid, invalid_utf8_message(field)))
 }
 
-/// Require a non-null operator pointer.
 pub fn require_operator<'a>(
     op: *const opendal::Operator,
 ) -> Result<&'a opendal::Operator, OpenDALError> {
@@ -66,12 +58,10 @@ pub fn require_operator<'a>(
     Ok(unsafe { &*op })
 }
 
-/// Require a non-null callback function pointer.
 pub fn require_callback<T>(callback: Option<T>) -> Result<T, OpenDALError> {
     callback.ok_or_else(|| config_invalid_error("callback pointer is null"))
 }
 
-/// Require a non-null data pointer when `len > 0`.
 pub fn require_data_ptr(data: *const u8, len: usize) -> Result<(), OpenDALError> {
     if len > 0 && data.is_null() {
         return Err(config_invalid_error("data pointer is null while len > 0"));

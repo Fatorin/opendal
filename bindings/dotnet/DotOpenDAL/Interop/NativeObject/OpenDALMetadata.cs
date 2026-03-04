@@ -22,9 +22,6 @@ using System.Runtime.InteropServices;
 namespace DotOpenDAL.Interop.NativeObject;
 
 [StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native payload for metadata returned by stat operations.
-/// </summary>
 internal struct OpenDALMetadata
 {
     public int Mode;

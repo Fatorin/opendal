@@ -22,9 +22,6 @@ using System.Runtime.InteropServices;
 namespace DotOpenDAL.Interop.NativeObject;
 
 [StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native entry payload used by list operations.
-/// </summary>
 internal struct OpenDALEntry
 {
     public IntPtr Path;

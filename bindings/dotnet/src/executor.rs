@@ -38,9 +38,6 @@ pub struct Executor {
 }
 
 impl Executor {
-    /// Create a Tokio-backed executor with a fixed number of worker threads.
-    ///
-    /// Returns `ConfigInvalid` if `threads` is zero.
     fn new(threads: usize) -> Result<Self, OpenDALError> {
         if threads == 0 {
             return Err(config_invalid_error("executor threads must be greater than 0"));
@@ -63,12 +60,10 @@ impl Executor {
         Ok(Self { runtime })
     }
 
-    /// Run a future to completion on this executor.
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.runtime.block_on(future)
     }
 
-    /// Spawn a future onto this executor and return its join handle.
     pub fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -78,9 +73,6 @@ impl Executor {
     }
 }
 
-/// Get or lazily initialize the process-wide default executor.
-///
-/// The default thread count is derived from available CPU parallelism.
 fn default_executor() -> Result<Arc<Executor>, OpenDALError> {
     if let Some(executor) = DEFAULT_EXECUTOR.get() {
         return Ok(executor.clone());
@@ -120,10 +112,6 @@ pub unsafe fn executor_or_default(executor: *const c_void) -> Result<Arc<Executo
         .ok_or_else(|| config_invalid_error("executor handle is invalid or disposed"))
 }
 
-/// Create a dedicated executor handle for .NET callers.
-///
-/// On success, returns a pointer-like handle that must be released by
-/// `executor_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn executor_create(threads: usize) -> OpendalExecutorResult {
     match Executor::new(threads) {
