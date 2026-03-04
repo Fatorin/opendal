@@ -23,17 +23,50 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service azblob.
+    /// </summary>
     public sealed class AzblobServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The account key of Azblob service backend.
+        /// </summary>
         public string? AccountKey { get; init; }
+        /// <summary>
+        /// The account name of Azblob service backend.
+        /// </summary>
         public string? AccountName { get; init; }
+        /// <summary>
+        /// The maximum batch operations of Azblob service backend.
+        /// </summary>
         public long? BatchMaxOperations { get; init; }
+        /// <summary>
+        /// The container name of Azblob service backend.
+        /// </summary>
         public string? Container { get; init; }
+        /// <summary>
+        /// The encryption algorithm of Azblob service backend.
+        /// </summary>
         public string? EncryptionAlgorithm { get; init; }
+        /// <summary>
+        /// The encryption key of Azblob service backend.
+        /// </summary>
         public string? EncryptionKey { get; init; }
+        /// <summary>
+        /// The encryption key sha256 of Azblob service backend.
+        /// </summary>
         public string? EncryptionKeySha256 { get; init; }
+        /// <summary>
+        /// The endpoint of Azblob service backend. Endpoint must be full uri, e.g. Azblob: https://accountname.blob.core.windows.net Azurite: http://127.0.0.1:10000/devstoreaccount1
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// The root of Azblob service backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The sas token of Azblob service backend.
+        /// </summary>
         public string? SasToken { get; init; }
 
         public string Scheme => "azblob";

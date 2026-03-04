@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service memcached.
+    /// </summary>
     public sealed class MemcachedServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The maximum number of connections allowed. default is 10
+        /// </summary>
         public int? ConnectionPoolMaxSize { get; init; }
+        /// <summary>
+        /// The default ttl for put operations.
+        /// </summary>
         public string? DefaultTtl { get; init; }
+        /// <summary>
+        /// network address of the memcached service. For example: "tcp://localhost:11211"
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// Memcached password, optional.
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// the working directory of the service. Can be "/path/to/dir" default is "/"
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Memcached username, optional.
+        /// </summary>
         public string? Username { get; init; }
 
         public string Scheme => "memcached";

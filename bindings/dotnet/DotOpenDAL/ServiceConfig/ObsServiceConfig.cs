@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service obs.
+    /// </summary>
     public sealed class ObsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Access key id for obs.
+        /// </summary>
         public string? AccessKeyId { get; init; }
+        /// <summary>
+        /// Bucket for obs.
+        /// </summary>
         public string? Bucket { get; init; }
+        /// <summary>
+        /// Is bucket versioning enabled for this bucket
+        /// </summary>
         public bool? EnableVersioning { get; init; }
+        /// <summary>
+        /// Endpoint for obs.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// Root for obs.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Secret access key for obs.
+        /// </summary>
         public string? SecretAccessKey { get; init; }
 
         public string Scheme => "obs";

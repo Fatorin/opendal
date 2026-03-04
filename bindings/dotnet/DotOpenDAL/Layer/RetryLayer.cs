@@ -21,18 +21,41 @@ using DotOpenDAL.Layer.Abstractions;
 
 namespace DotOpenDAL.Layer;
 
+/// <summary>
+/// Retry layer configuration for transient operation failures.
+/// </summary>
 public sealed class RetryLayer : ILayer
 {
+    /// <summary>
+    /// Gets whether to enable randomized backoff jitter.
+    /// </summary>
     public bool Jitter { get; init; }
 
+    /// <summary>
+    /// Gets exponential retry factor.
+    /// </summary>
     public float Factor { get; init; } = 2f;
 
+    /// <summary>
+    /// Gets minimum retry delay.
+    /// </summary>
     public TimeSpan MinDelay { get; init; } = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// Gets maximum retry delay.
+    /// </summary>
     public TimeSpan MaxDelay { get; init; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// Gets maximum retry attempts.
+    /// </summary>
     public nuint MaxTimes { get; init; } = 3;
 
+    /// <summary>
+    /// Applies retry behavior to the specified operator.
+    /// </summary>
+    /// <param name="op">Operator to layer.</param>
+    /// <returns>The layered operator instance.</returns>
     public Operator Apply(Operator op)
     {
         ArgumentNullException.ThrowIfNull(op);
@@ -45,7 +68,8 @@ public sealed class RetryLayer : ILayer
             Factor,
             ToNanos(MinDelay),
             ToNanos(MaxDelay),
-            MaxTimes);
+            MaxTimes
+        );
 
         return op.ApplyLayerResult(result);
     }

@@ -23,10 +23,22 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service dbfs.
+    /// </summary>
     public sealed class DbfsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The endpoint for dbfs.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// The root for dbfs.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The token for dbfs.
+        /// </summary>
         public string? Token { get; init; }
 
         public string Scheme => "dbfs";

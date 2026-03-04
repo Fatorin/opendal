@@ -70,6 +70,7 @@ public sealed class WriteOptions : IOptions
         return NativeOptionsBuilder.BuildNativeOptionsHandle(
             nativeOptions,
             NativeMethods.write_option_build,
-            NativeMethods.write_option_free);
+            NativeMethods.write_option_free
+        );
     }
 }

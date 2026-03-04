@@ -23,8 +23,14 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service memory.
+    /// </summary>
     public sealed class MemoryServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// root of the backend.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "memory";

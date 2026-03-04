@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service http.
+    /// </summary>
     public sealed class HttpServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// endpoint of this backend
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// password of this backend
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// root of this backend
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// token of this backend
+        /// </summary>
         public string? Token { get; init; }
+        /// <summary>
+        /// username of this backend
+        /// </summary>
         public string? Username { get; init; }
 
         public string Scheme => "http";

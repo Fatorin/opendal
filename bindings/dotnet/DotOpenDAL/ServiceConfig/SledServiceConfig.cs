@@ -23,10 +23,22 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service sled.
+    /// </summary>
     public sealed class SledServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// That path to the sled data directory.
+        /// </summary>
         public string? Datadir { get; init; }
+        /// <summary>
+        /// The root for sled.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The tree for sled.
+        /// </summary>
         public string? Tree { get; init; }
 
         public string Scheme => "sled";

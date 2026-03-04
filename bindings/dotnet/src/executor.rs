@@ -120,10 +120,10 @@ pub unsafe fn executor_or_default(executor: *const c_void) -> Result<Arc<Executo
         .ok_or_else(|| config_invalid_error("executor handle is invalid or disposed"))
 }
 
-    /// Create a dedicated executor handle for .NET callers.
-    ///
-    /// On success, returns a pointer-like handle that must be released by
-    /// `executor_free`.
+/// Create a dedicated executor handle for .NET callers.
+///
+/// On success, returns a pointer-like handle that must be released by
+/// `executor_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn executor_create(threads: usize) -> OpendalExecutorResult {
     match Executor::new(threads) {

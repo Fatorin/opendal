@@ -23,10 +23,22 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service redb.
+    /// </summary>
     public sealed class RedbServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// path to the redb data directory.
+        /// </summary>
         public string? Datadir { get; init; }
+        /// <summary>
+        /// The root for redb.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The table name for redb.
+        /// </summary>
         public string? Table { get; init; }
 
         public string Scheme => "redb";

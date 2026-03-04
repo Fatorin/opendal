@@ -17,18 +17,26 @@
  * under the License.
  */
 
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
-
 namespace DotOpenDAL;
 
 /// <summary>
-/// Entry mode of a path.
+/// Entry mode of a path reported by native OpenDAL metadata.
 /// </summary>
 public enum EntryMode
 {
+    /// <summary>
+    /// Entry is a file.
+    /// </summary>
     File = 0,
+
+    /// <summary>
+    /// Entry is a directory.
+    /// </summary>
     Dir = 1,
+
+    /// <summary>
+    /// Entry mode is unknown.
+    /// </summary>
     Unknown = 2,
 }
 
@@ -61,114 +69,64 @@ public sealed class Metadata
         Version = version;
     }
 
+    /// <summary>
+    /// Gets entry mode.
+    /// </summary>
     public EntryMode Mode { get; }
 
+    /// <summary>
+    /// Gets content length in bytes.
+    /// </summary>
     public ulong ContentLength { get; }
 
+    /// <summary>
+    /// Gets <c>Content-Disposition</c> header value, if available.
+    /// </summary>
     public string? ContentDisposition { get; }
 
+    /// <summary>
+    /// Gets <c>Content-MD5</c> header value, if available.
+    /// </summary>
     public string? ContentMd5 { get; }
 
+    /// <summary>
+    /// Gets <c>Content-Type</c> header value, if available.
+    /// </summary>
     public string? ContentType { get; }
 
+    /// <summary>
+    /// Gets <c>Content-Encoding</c> header value, if available.
+    /// </summary>
     public string? ContentEncoding { get; }
 
+    /// <summary>
+    /// Gets <c>Cache-Control</c> header value, if available.
+    /// </summary>
     public string? CacheControl { get; }
 
+    /// <summary>
+    /// Gets entity tag (<c>ETag</c>) value, if available.
+    /// </summary>
     public string? ETag { get; }
 
+    /// <summary>
+    /// Gets last-modified timestamp, if available.
+    /// The value is materialized from native Unix seconds and nanoseconds.
+    /// </summary>
     public DateTimeOffset? LastModified { get; }
 
+    /// <summary>
+    /// Gets object version, if available.
+    /// </summary>
     public string? Version { get; }
 
+    /// <summary>
+    /// Gets whether this metadata represents a file.
+    /// </summary>
     public bool IsFile => Mode == EntryMode.File;
 
+    /// <summary>
+    /// Gets whether this metadata represents a directory.
+    /// </summary>
     public bool IsDir => Mode == EntryMode.Dir;
-
-    internal static unsafe Metadata FromNativePointer(IntPtr ptr)
-    {
-        if (ptr == IntPtr.Zero)
-        {
-            throw new InvalidOperationException("stat returned null metadata pointer");
-        }
-
-        var payload = Unsafe.Read<OpenDALMetadata>((void*)ptr);
-        return FromNativePayload(payload);
-    }
-
-    internal static Metadata FromNativePayload(OpenDALMetadata payload)
-    {
-        DateTimeOffset? lastModified = null;
-        if (payload.LastModifiedHasValue != 0)
-        {
-            lastModified = DateTimeOffset.FromUnixTimeSeconds(payload.LastModifiedSecond)
-                .AddTicks(payload.LastModifiedNanosecond / 100);
-        }
-
-        var mode = payload.Mode switch
-        {
-            0 => EntryMode.File,
-            1 => EntryMode.Dir,
-            _ => EntryMode.Unknown,
-        };
-
-        static string? ReadNullableUtf8(IntPtr value)
-        {
-            return value == IntPtr.Zero ? null : Utilities.ReadUtf8(value);
-        }
-
-        return new Metadata(
-            mode,
-            payload.ContentLength,
-            ReadNullableUtf8(payload.ContentDisposition),
-            ReadNullableUtf8(payload.ContentMd5),
-            ReadNullableUtf8(payload.ContentType),
-            ReadNullableUtf8(payload.ContentEncoding),
-            ReadNullableUtf8(payload.CacheControl),
-            ReadNullableUtf8(payload.ETag),
-            lastModified,
-            ReadNullableUtf8(payload.Version));
-    }
-}
-
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native entry payload used by list operations.
-/// </summary>
-internal struct OpenDALEntry
-{
-    public IntPtr Path;
-
-    public IntPtr Metadata;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native payload for metadata returned by stat operations.
-/// </summary>
-internal struct OpenDALMetadata
-{
-    public int Mode;
-
-    public ulong ContentLength;
-
-    public IntPtr ContentDisposition;
-
-    public IntPtr ContentMd5;
-
-    public IntPtr ContentType;
-
-    public IntPtr ContentEncoding;
-
-    public IntPtr CacheControl;
-
-    public IntPtr ETag;
-
-    public byte LastModifiedHasValue;
-
-    public long LastModifiedSecond;
-
-    public int LastModifiedNanosecond;
-
-    public IntPtr Version;
 }

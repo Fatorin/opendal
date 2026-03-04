@@ -23,6 +23,9 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service opfs.
+    /// </summary>
     public sealed class OpfsServiceConfig : IServiceConfig
     {
         public string Scheme => "opfs";

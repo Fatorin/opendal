@@ -23,8 +23,14 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service dashmap.
+    /// </summary>
     public sealed class DashmapServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// root path of this backend
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "dashmap";

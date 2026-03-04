@@ -23,11 +23,26 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service koofr.
+    /// </summary>
     public sealed class KoofrServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Koofr email.
+        /// </summary>
         public string? Email { get; init; }
+        /// <summary>
+        /// Koofr endpoint.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// password of this backend. (Must be the application password)
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "koofr";

@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service onedrive.
+    /// </summary>
     public sealed class OnedriveServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Microsoft Graph API (also OneDrive API) access token
+        /// </summary>
         public string? AccessToken { get; init; }
+        /// <summary>
+        /// Microsoft Graph API Application (client) ID that is in the Azure's app registration portal
+        /// </summary>
         public string? ClientId { get; init; }
+        /// <summary>
+        /// Microsoft Graph API Application client secret that is in the Azure's app registration portal
+        /// </summary>
         public string? ClientSecret { get; init; }
+        /// <summary>
+        /// Enabling version support
+        /// </summary>
         public bool? EnableVersioning { get; init; }
+        /// <summary>
+        /// Microsoft Graph API (also OneDrive API) refresh token
+        /// </summary>
         public string? RefreshToken { get; init; }
+        /// <summary>
+        /// The root path for the OneDrive service for the file access
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "onedrive";

@@ -58,6 +58,7 @@ public sealed class StatOptions : IOptions
         return NativeOptionsBuilder.BuildNativeOptionsHandle(
             nativeOptions,
             NativeMethods.stat_option_build,
-            NativeMethods.stat_option_free);
+            NativeMethods.stat_option_free
+        );
     }
 }

@@ -23,8 +23,14 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service monoiofs.
+    /// </summary>
     public sealed class MonoiofsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The Root of this backend. All operations will happen under this root. Builder::build will return error if not set.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "monoiofs";

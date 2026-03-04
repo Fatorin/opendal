@@ -18,9 +18,17 @@
  */
 
 using System.Runtime.InteropServices;
+using DotOpenDAL.Interop.Result;
 
 namespace DotOpenDAL.Options;
 
+/// <summary>
+/// Delegate that builds a native options payload from managed key/value arrays.
+/// </summary>
+/// <param name="keys">Option keys.</param>
+/// <param name="values">Option values aligned by index with <paramref name="keys"/>.</param>
+/// <param name="len">Number of key/value pairs.</param>
+/// <returns>Native options build result.</returns>
 internal delegate OpenDALOptionsResult NativeBuildOptionsDelegate(string[] keys, string[] values, nuint len);
 
 /// <summary>
@@ -134,6 +142,15 @@ internal sealed class NativeOptionsBuilder
         return options;
     }
 
+    /// <summary>
+    /// Builds a native options handle from managed key/value options.
+    /// </summary>
+    /// <param name="options">Managed options dictionary.</param>
+    /// <param name="build">Native build function used to allocate and populate options payload.</param>
+    /// <param name="release">Native release function used by the resulting handle.</param>
+    /// <returns>A safe handle that owns the native options payload.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
+    /// <exception cref="OpenDALException">Native options build fails.</exception>
     public static NativeOptionsHandle BuildNativeOptionsHandle(
         IReadOnlyDictionary<string, string> options,
         NativeBuildOptionsDelegate build,
@@ -153,19 +170,7 @@ internal sealed class NativeOptionsBuilder
         }
 
         var result = build(keys, values, (nuint)options.Count);
-
-        try
-        {
-            if (result.Ptr == IntPtr.Zero)
-            {
-                throw new OpenDALException(result.Error);
-            }
-
-            return new NativeOptionsHandle(result.Ptr, release);
-        }
-        finally
-        {
-            result.Release();
-        }
+        var handle = Operator.ToValueOrThrowAndRelease<IntPtr, OpenDALOptionsResult>(result);
+        return new NativeOptionsHandle(handle, release);
     }
 }

@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service aliyun_drive.
+    /// </summary>
     public sealed class AliyunDriveServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The access_token of this backend. Solution for client-only purpose. #4733 Required if no client_id, client_secret and refresh_token are provided.
+        /// </summary>
         public string? AccessToken { get; init; }
+        /// <summary>
+        /// The client_id of this backend. Required if no access_token is provided.
+        /// </summary>
         public string? ClientId { get; init; }
+        /// <summary>
+        /// The client_secret of this backend. Required if no access_token is provided.
+        /// </summary>
         public string? ClientSecret { get; init; }
+        /// <summary>
+        /// The drive_type of this backend. All operations will happen under this type of drive. Available values are default, backup and resource. Fallback to default if not set or no other drives can be found.
+        /// </summary>
         public string? DriveType { get; init; }
+        /// <summary>
+        /// The refresh_token of this backend. Required if no access_token is provided.
+        /// </summary>
         public string? RefreshToken { get; init; }
+        /// <summary>
+        /// The Root of this backend. All operations will happen under this root. Default to / if not set.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "aliyun_drive";

@@ -23,8 +23,14 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service compfs.
+    /// </summary>
     public sealed class CompfsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "compfs";

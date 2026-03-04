@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service huggingface.
+    /// </summary>
     public sealed class HuggingfaceServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Repo id of this backend. This is required.
+        /// </summary>
         public string? RepoId { get; init; }
+        /// <summary>
+        /// Repo type of this backend. Default is model. Available values: model dataset
+        /// </summary>
         public string? RepoType { get; init; }
+        /// <summary>
+        /// Revision of this backend. Default is main.
+        /// </summary>
         public string? Revision { get; init; }
+        /// <summary>
+        /// Root of this backend. Can be "/path/to/dir". Default is "/".
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Token of this backend. This is optional.
+        /// </summary>
         public string? Token { get; init; }
 
         public string Scheme => "huggingface";

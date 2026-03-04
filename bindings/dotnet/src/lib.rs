@@ -15,15 +15,32 @@
 // specific language governing permissions and limitations
 // under the License.
 
+//! Rust FFI layer backing the OpenDAL .NET binding.
+//!
+//! This crate exposes `extern "C"` APIs consumed by C# via P/Invoke and keeps
+//! interop memory ownership explicit through dedicated release functions.
+
+/// Error interop types and conversion helpers.
 mod error;
+/// Result wrappers and release entry points for FFI calls.
 mod result;
+/// Capability interop structures.
 mod capability;
+/// Operator-info interop structures.
 mod operator_info;
+/// Shared FFI utilities and pointer validation helpers.
 mod utils;
+/// Operator-related FFI APIs.
 mod operator;
+/// Byte buffer interop helpers.
 mod byte_buffer;
+/// Executor registry and runtime management for async operations.
 mod executor;
+/// Option parsing and typed option structures.
 mod options;
+/// Metadata interop structures.
 mod metadata;
+/// Entry/list interop structures.
 mod entry;
+/// Input validators for layer/options FFI.
 mod validators;

@@ -23,11 +23,26 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service mini_moka.
+    /// </summary>
     public sealed class MiniMokaServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Sets the max capacity of the cache. Refer to mini-moka::sync::CacheBuilder::max_capacity
+        /// </summary>
         public long? MaxCapacity { get; init; }
+        /// <summary>
+        /// root path of this backend
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Sets the time to idle of the cache. Refer to mini-moka::sync::CacheBuilder::time_to_idle
+        /// </summary>
         public string? TimeToIdle { get; init; }
+        /// <summary>
+        /// Sets the time to live of the cache. Refer to mini-moka::sync::CacheBuilder::time_to_live
+        /// </summary>
         public string? TimeToLive { get; init; }
 
         public string Scheme => "mini_moka";

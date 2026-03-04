@@ -18,6 +18,7 @@
  */
 
 using System.Runtime.InteropServices;
+using DotOpenDAL.Interop.Result;
 
 namespace DotOpenDAL;
 
@@ -29,6 +30,9 @@ public sealed class Executor : SafeHandle
     /// <summary>
     /// Creates an executor with the given number of worker threads.
     /// </summary>
+    /// <remarks>
+    /// This executor can be passed to operator APIs to control the runtime that executes the underlying native tasks.
+    /// </remarks>
     /// <param name="threads">Number of Tokio worker threads. Must be greater than zero.</param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="threads"/> is less than or equal to zero.</exception>
     /// <exception cref="OpenDALException">Native executor creation fails.</exception>
@@ -50,20 +54,7 @@ public sealed class Executor : SafeHandle
         }
 
         var result = NativeMethods.executor_create((nuint)threads);
-
-        try
-        {
-            if (result.Ptr == IntPtr.Zero)
-            {
-                throw new OpenDALException(result.Error);
-            }
-
-            return result.Ptr;
-        }
-        finally
-        {
-            result.Release();
-        }
+        return Operator.ToValueOrThrowAndRelease<IntPtr, OpenDALExecutorResult>(result);
     }
 
     /// <summary>

@@ -19,7 +19,15 @@
 
 namespace DotOpenDAL.Layer.Abstractions;
 
+/// <summary>
+/// Represents an operator layer that produces a layered operator instance.
+/// </summary>
 public interface ILayer
 {
+    /// <summary>
+    /// Applies this layer to the specified operator.
+    /// </summary>
+    /// <param name="op">Operator to apply the layer to.</param>
+    /// <returns>The layered operator instance.</returns>
     Operator Apply(Operator op);
 }

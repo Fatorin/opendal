@@ -23,20 +23,62 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service gcs.
+    /// </summary>
     public sealed class GcsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Allow opendal to send requests without signing when credentials are not loaded.
+        /// </summary>
         public bool? AllowAnonymous { get; init; }
+        /// <summary>
+        /// bucket name
+        /// </summary>
         public string? Bucket { get; init; }
+        /// <summary>
+        /// Credentials string for GCS service OAuth2 authentication.
+        /// </summary>
         public string? Credential { get; init; }
+        /// <summary>
+        /// Local path to credentials file for GCS service OAuth2 authentication.
+        /// </summary>
         public string? CredentialPath { get; init; }
+        /// <summary>
+        /// The default storage class used by gcs.
+        /// </summary>
         public string? DefaultStorageClass { get; init; }
+        /// <summary>
+        /// Disable loading configuration from the environment.
+        /// </summary>
         public bool? DisableConfigLoad { get; init; }
+        /// <summary>
+        /// Disable attempting to load credentials from the GCE metadata server when running within Google Cloud.
+        /// </summary>
         public bool? DisableVmMetadata { get; init; }
+        /// <summary>
+        /// endpoint URI of GCS service, default is https://storage.googleapis.com
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// The predefined acl for GCS.
+        /// </summary>
         public string? PredefinedAcl { get; init; }
+        /// <summary>
+        /// root URI, all operations happens under root
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Scope for gcs.
+        /// </summary>
         public string? Scope { get; init; }
+        /// <summary>
+        /// Service Account for gcs.
+        /// </summary>
         public string? ServiceAccount { get; init; }
+        /// <summary>
+        /// A Google Cloud OAuth2 token. Takes precedence over credential and credential_path.
+        /// </summary>
         public string? Token { get; init; }
 
         public string Scheme => "gcs";

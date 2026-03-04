@@ -23,16 +23,46 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service surrealdb.
+    /// </summary>
     public sealed class SurrealdbServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The connection string for surrealdb.
+        /// </summary>
         public string? ConnectionString { get; init; }
+        /// <summary>
+        /// The database for surrealdb.
+        /// </summary>
         public string? Database { get; init; }
+        /// <summary>
+        /// The key field for surrealdb.
+        /// </summary>
         public string? KeyField { get; init; }
+        /// <summary>
+        /// The namespace for surrealdb.
+        /// </summary>
         public string? Namespace { get; init; }
+        /// <summary>
+        /// The password for surrealdb.
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// The root for surrealdb.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The table for surrealdb.
+        /// </summary>
         public string? Table { get; init; }
+        /// <summary>
+        /// The username for surrealdb.
+        /// </summary>
         public string? Username { get; init; }
+        /// <summary>
+        /// The value field for surrealdb.
+        /// </summary>
         public string? ValueField { get; init; }
 
         public string Scheme => "surrealdb";

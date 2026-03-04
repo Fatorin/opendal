@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service sftp.
+    /// </summary>
     public sealed class SftpServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// enable_copy of this backend
+        /// </summary>
         public bool? EnableCopy { get; init; }
+        /// <summary>
+        /// endpoint of this backend
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// key of this backend
+        /// </summary>
         public string? Key { get; init; }
+        /// <summary>
+        /// known_hosts_strategy of this backend
+        /// </summary>
         public string? KnownHostsStrategy { get; init; }
+        /// <summary>
+        /// root of this backend
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// user of this backend
+        /// </summary>
         public string? User { get; init; }
 
         public string Scheme => "sftp";

@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service gdrive.
+    /// </summary>
     public sealed class GdriveServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Access token for gdrive.
+        /// </summary>
         public string? AccessToken { get; init; }
+        /// <summary>
+        /// Client id for gdrive.
+        /// </summary>
         public string? ClientId { get; init; }
+        /// <summary>
+        /// Client secret for gdrive.
+        /// </summary>
         public string? ClientSecret { get; init; }
+        /// <summary>
+        /// Refresh token for gdrive.
+        /// </summary>
         public string? RefreshToken { get; init; }
+        /// <summary>
+        /// The root for gdrive
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "gdrive";

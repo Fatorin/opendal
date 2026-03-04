@@ -79,6 +79,7 @@ public sealed class ReadOptions : IOptions
         return NativeOptionsBuilder.BuildNativeOptionsHandle(
             nativeOptions,
             NativeMethods.read_option_build,
-            NativeMethods.read_option_free);
+            NativeMethods.read_option_free
+        );
     }
 }

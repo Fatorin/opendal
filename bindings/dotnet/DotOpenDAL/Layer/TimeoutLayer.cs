@@ -21,12 +21,26 @@ using DotOpenDAL.Layer.Abstractions;
 
 namespace DotOpenDAL.Layer;
 
+/// <summary>
+/// Timeout layer configuration for operation and I/O deadlines.
+/// </summary>
 public sealed class TimeoutLayer : ILayer
 {
+    /// <summary>
+    /// Gets total operation timeout.
+    /// </summary>
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// Gets per-I/O timeout.
+    /// </summary>
     public TimeSpan IoTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// Applies timeout behavior to the specified operator.
+    /// </summary>
+    /// <param name="op">Operator to layer.</param>
+    /// <returns>The layered operator instance.</returns>
     public Operator Apply(Operator op)
     {
         ArgumentNullException.ThrowIfNull(op);
@@ -36,7 +50,8 @@ public sealed class TimeoutLayer : ILayer
         var result = NativeMethods.operator_layer_timeout(
             op,
             ToNanos(Timeout),
-            ToNanos(IoTimeout));
+            ToNanos(IoTimeout)
+        );
 
         return op.ApplyLayerResult(result);
     }

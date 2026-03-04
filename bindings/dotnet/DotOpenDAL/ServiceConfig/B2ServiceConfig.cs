@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service b2.
+    /// </summary>
     public sealed class B2ServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// applicationKey of this backend. If application_key is set, we will take user's input first. If not, we will try to load it from environment.
+        /// </summary>
         public string? ApplicationKey { get; init; }
+        /// <summary>
+        /// keyID of this backend. If application_key_id is set, we will take user's input first. If not, we will try to load it from environment.
+        /// </summary>
         public string? ApplicationKeyId { get; init; }
+        /// <summary>
+        /// bucket of this backend. required.
+        /// </summary>
         public string? Bucket { get; init; }
+        /// <summary>
+        /// bucket id of this backend. required.
+        /// </summary>
         public string? BucketId { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "b2";

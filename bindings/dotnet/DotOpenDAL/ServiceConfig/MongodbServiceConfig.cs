@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service mongodb.
+    /// </summary>
     public sealed class MongodbServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// collection of this backend
+        /// </summary>
         public string? Collection { get; init; }
+        /// <summary>
+        /// connection string of this backend
+        /// </summary>
         public string? ConnectionString { get; init; }
+        /// <summary>
+        /// database of this backend
+        /// </summary>
         public string? Database { get; init; }
+        /// <summary>
+        /// key field of this backend
+        /// </summary>
         public string? KeyField { get; init; }
+        /// <summary>
+        /// root of this backend
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// value field of this backend
+        /// </summary>
         public string? ValueField { get; init; }
 
         public string Scheme => "mongodb";

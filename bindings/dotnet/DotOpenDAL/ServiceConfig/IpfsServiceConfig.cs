@@ -23,9 +23,18 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service ipfs.
+    /// </summary>
     public sealed class IpfsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// IPFS gateway endpoint.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// IPFS root.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "ipfs";

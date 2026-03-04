@@ -23,11 +23,26 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service github.
+    /// </summary>
     public sealed class GithubServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// GitHub repo owner. required.
+        /// </summary>
         public string? Owner { get; init; }
+        /// <summary>
+        /// GitHub repo name. required.
+        /// </summary>
         public string? Repo { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// GitHub access_token. optional. If not provided, the backend will only support read operations for public repositories. And rate limit will be limited to 60 requests per hour.
+        /// </summary>
         public string? Token { get; init; }
 
         public string Scheme => "github";

@@ -23,11 +23,26 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service swift.
+    /// </summary>
     public sealed class SwiftServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The container for Swift.
+        /// </summary>
         public string? Container { get; init; }
+        /// <summary>
+        /// The endpoint for Swift.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// The root for Swift.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The token for Swift.
+        /// </summary>
         public string? Token { get; init; }
 
         public string Scheme => "swift";

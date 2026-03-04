@@ -23,8 +23,14 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service cacache.
+    /// </summary>
     public sealed class CacacheServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// That path to the cacache data directory.
+        /// </summary>
         public string? Datadir { get; init; }
 
         public string Scheme => "cacache";

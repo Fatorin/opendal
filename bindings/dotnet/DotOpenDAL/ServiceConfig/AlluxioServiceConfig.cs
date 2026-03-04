@@ -23,9 +23,18 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service alluxio.
+    /// </summary>
     public sealed class AlluxioServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// endpoint of this backend. Endpoint must be full uri, mostly like http://127.0.0.1:39999.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root. default to / if not set.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "alluxio";

@@ -23,11 +23,26 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service pcloud.
+    /// </summary>
     public sealed class PcloudServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// pCloud endpoint address.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// pCloud password.
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// pCloud username.
+        /// </summary>
         public string? Username { get; init; }
 
         public string Scheme => "pcloud";

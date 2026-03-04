@@ -17,7 +17,7 @@
  * under the License.
  */
 
-using System.Runtime.InteropServices;
+using DotOpenDAL.Interop.NativeObject;
 
 namespace DotOpenDAL;
 
@@ -28,333 +28,335 @@ namespace DotOpenDAL;
 /// This model maps from native capability payload returned by OpenDAL.
 /// For write multi size fields, nullable values are represented by a native sentinel value.
 /// </remarks>
-[StructLayout(LayoutKind.Sequential)]
 public struct Capability
 {
-    [MarshalAs(UnmanagedType.U1)] internal byte stat;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithIfMatch;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithIfNoneMatch;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithIfModifiedSince;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithIfUnmodifiedSince;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithOverrideCacheControl;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithOverrideContentDisposition;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithOverrideContentType;
-    [MarshalAs(UnmanagedType.U1)] internal byte statWithVersion;
+    internal Capability(OpenDALCapability native)
+    {
+        Stat = native.stat != 0;
+        StatWithIfMatch = native.statWithIfMatch != 0;
+        StatWithIfNoneMatch = native.statWithIfNoneMatch != 0;
+        StatWithIfModifiedSince = native.statWithIfModifiedSince != 0;
+        StatWithIfUnmodifiedSince = native.statWithIfUnmodifiedSince != 0;
+        StatWithOverrideCacheControl = native.statWithOverrideCacheControl != 0;
+        StatWithOverrideContentDisposition = native.statWithOverrideContentDisposition != 0;
+        StatWithOverrideContentType = native.statWithOverrideContentType != 0;
+        StatWithVersion = native.statWithVersion != 0;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte read;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithIfMatch;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithIfNoneMatch;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithIfModifiedSince;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithIfUnmodifiedSince;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithOverrideCacheControl;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithOverrideContentDisposition;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithOverrideContentType;
-    [MarshalAs(UnmanagedType.U1)] internal byte readWithVersion;
+        Read = native.read != 0;
+        ReadWithIfMatch = native.readWithIfMatch != 0;
+        ReadWithIfNoneMatch = native.readWithIfNoneMatch != 0;
+        ReadWithIfModifiedSince = native.readWithIfModifiedSince != 0;
+        ReadWithIfUnmodifiedSince = native.readWithIfUnmodifiedSince != 0;
+        ReadWithOverrideCacheControl = native.readWithOverrideCacheControl != 0;
+        ReadWithOverrideContentDisposition = native.readWithOverrideContentDisposition != 0;
+        ReadWithOverrideContentType = native.readWithOverrideContentType != 0;
+        ReadWithVersion = native.readWithVersion != 0;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte write;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeCanMulti;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeCanEmpty;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeCanAppend;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithContentType;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithContentDisposition;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithContentEncoding;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithCacheControl;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithIfMatch;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithIfNoneMatch;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithIfNotExists;
-    [MarshalAs(UnmanagedType.U1)] internal byte writeWithUserMetadata;
+        Write = native.write != 0;
+        WriteCanMulti = native.writeCanMulti != 0;
+        WriteCanEmpty = native.writeCanEmpty != 0;
+        WriteCanAppend = native.writeCanAppend != 0;
+        WriteWithContentType = native.writeWithContentType != 0;
+        WriteWithContentDisposition = native.writeWithContentDisposition != 0;
+        WriteWithContentEncoding = native.writeWithContentEncoding != 0;
+        WriteWithCacheControl = native.writeWithCacheControl != 0;
+        WriteWithIfMatch = native.writeWithIfMatch != 0;
+        WriteWithIfNoneMatch = native.writeWithIfNoneMatch != 0;
+        WriteWithIfNotExists = native.writeWithIfNotExists != 0;
+        WriteWithUserMetadata = native.writeWithUserMetadata != 0;
 
-    internal nuint writeMultiMaxSize;
-    internal nuint writeMultiMinSize;
-    internal nuint writeTotalMaxSize;
+        WriteMultiMaxSize = native.writeMultiMaxSize == nuint.MaxValue ? null : native.writeMultiMaxSize;
+        WriteMultiMinSize = native.writeMultiMinSize == nuint.MaxValue ? null : native.writeMultiMinSize;
+        WriteTotalMaxSize = native.writeTotalMaxSize == nuint.MaxValue ? null : native.writeTotalMaxSize;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte createDir;
-    [MarshalAs(UnmanagedType.U1)] internal byte delete;
-    [MarshalAs(UnmanagedType.U1)] internal byte deleteWithVersion;
-    [MarshalAs(UnmanagedType.U1)] internal byte deleteWithRecursive;
-    internal nuint deleteMaxSize;
+        CreateDir = native.createDir != 0;
+        Delete = native.delete != 0;
+        DeleteWithVersion = native.deleteWithVersion != 0;
+        DeleteWithRecursive = native.deleteWithRecursive != 0;
+        DeleteMaxSize = native.deleteMaxSize == nuint.MaxValue ? null : native.deleteMaxSize;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte copy;
-    [MarshalAs(UnmanagedType.U1)] internal byte copyWithIfNotExists;
-    [MarshalAs(UnmanagedType.U1)] internal byte rename;
+        Copy = native.copy != 0;
+        CopyWithIfNotExists = native.copyWithIfNotExists != 0;
+        Rename = native.rename != 0;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte list;
-    [MarshalAs(UnmanagedType.U1)] internal byte listWithLimit;
-    [MarshalAs(UnmanagedType.U1)] internal byte listWithStartAfter;
-    [MarshalAs(UnmanagedType.U1)] internal byte listWithRecursive;
-    [MarshalAs(UnmanagedType.U1)] internal byte listWithVersions;
-    [MarshalAs(UnmanagedType.U1)] internal byte listWithDeleted;
+        List = native.list != 0;
+        ListWithLimit = native.listWithLimit != 0;
+        ListWithStartAfter = native.listWithStartAfter != 0;
+        ListWithRecursive = native.listWithRecursive != 0;
+        ListWithVersions = native.listWithVersions != 0;
+        ListWithDeleted = native.listWithDeleted != 0;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte presign;
-    [MarshalAs(UnmanagedType.U1)] internal byte presignRead;
-    [MarshalAs(UnmanagedType.U1)] internal byte presignStat;
-    [MarshalAs(UnmanagedType.U1)] internal byte presignWrite;
-    [MarshalAs(UnmanagedType.U1)] internal byte presignDelete;
+        Presign = native.presign != 0;
+        PresignRead = native.presignRead != 0;
+        PresignStat = native.presignStat != 0;
+        PresignWrite = native.presignWrite != 0;
+        PresignDelete = native.presignDelete != 0;
 
-    [MarshalAs(UnmanagedType.U1)] internal byte shared;
+        Shared = native.shared != 0;
+    }
 
     /// <summary>
     /// If operator supports stat.
     /// </summary>
-    public bool Stat => stat != 0;
+    public bool Stat { get; private set; }
 
     /// <summary>
     /// If operator supports stat with if match.
     /// </summary>
-    public bool StatWithIfMatch => statWithIfMatch != 0;
+    public bool StatWithIfMatch { get; private set; }
 
     /// <summary>
     /// If operator supports stat with if none match.
     /// </summary>
-    public bool StatWithIfNoneMatch => statWithIfNoneMatch != 0;
+    public bool StatWithIfNoneMatch { get; private set; }
 
     /// <summary>
     /// If operator supports stat with if modified since.
     /// </summary>
-    public bool StatWithIfModifiedSince => statWithIfModifiedSince != 0;
+    public bool StatWithIfModifiedSince { get; private set; }
 
     /// <summary>
     /// If operator supports stat with if unmodified since.
     /// </summary>
-    public bool StatWithIfUnmodifiedSince => statWithIfUnmodifiedSince != 0;
+    public bool StatWithIfUnmodifiedSince { get; private set; }
 
     /// <summary>
     /// If operator supports stat with override cache control.
     /// </summary>
-    public bool StatWithOverrideCacheControl => statWithOverrideCacheControl != 0;
+    public bool StatWithOverrideCacheControl { get; private set; }
 
     /// <summary>
     /// If operator supports stat with override content disposition.
     /// </summary>
-    public bool StatWithOverrideContentDisposition => statWithOverrideContentDisposition != 0;
+    public bool StatWithOverrideContentDisposition { get; private set; }
 
     /// <summary>
     /// If operator supports stat with override content type.
     /// </summary>
-    public bool StatWithOverrideContentType => statWithOverrideContentType != 0;
+    public bool StatWithOverrideContentType { get; private set; }
 
     /// <summary>
     /// If operator supports stat with version.
     /// </summary>
-    public bool StatWithVersion => statWithVersion != 0;
+    public bool StatWithVersion { get; private set; }
 
     /// <summary>
     /// If operator supports read.
     /// </summary>
-    public bool Read => read != 0;
+    public bool Read { get; private set; }
 
     /// <summary>
     /// If operator supports read with if match.
     /// </summary>
-    public bool ReadWithIfMatch => readWithIfMatch != 0;
+    public bool ReadWithIfMatch { get; private set; }
 
     /// <summary>
     /// If operator supports read with if none match.
     /// </summary>
-    public bool ReadWithIfNoneMatch => readWithIfNoneMatch != 0;
+    public bool ReadWithIfNoneMatch { get; private set; }
 
     /// <summary>
     /// If operator supports read with if modified since.
     /// </summary>
-    public bool ReadWithIfModifiedSince => readWithIfModifiedSince != 0;
+    public bool ReadWithIfModifiedSince { get; private set; }
 
     /// <summary>
     /// If operator supports read with if unmodified since.
     /// </summary>
-    public bool ReadWithIfUnmodifiedSince => readWithIfUnmodifiedSince != 0;
+    public bool ReadWithIfUnmodifiedSince { get; private set; }
 
     /// <summary>
     /// If operator supports read with override cache control.
     /// </summary>
-    public bool ReadWithOverrideCacheControl => readWithOverrideCacheControl != 0;
+    public bool ReadWithOverrideCacheControl { get; private set; }
 
     /// <summary>
     /// If operator supports read with override content disposition.
     /// </summary>
-    public bool ReadWithOverrideContentDisposition => readWithOverrideContentDisposition != 0;
+    public bool ReadWithOverrideContentDisposition { get; private set; }
 
     /// <summary>
     /// If operator supports read with override content type.
     /// </summary>
-    public bool ReadWithOverrideContentType => readWithOverrideContentType != 0;
+    public bool ReadWithOverrideContentType { get; private set; }
 
     /// <summary>
     /// If operator supports read with version.
     /// </summary>
-    public bool ReadWithVersion => readWithVersion != 0;
+    public bool ReadWithVersion { get; private set; }
 
     /// <summary>
     /// If operator supports write.
     /// </summary>
-    public bool Write => write != 0;
+    public bool Write { get; private set; }
 
     /// <summary>
     /// If operator supports write can be called in multi times.
     /// </summary>
-    public bool WriteCanMulti => writeCanMulti != 0;
+    public bool WriteCanMulti { get; private set; }
 
     /// <summary>
     /// If operator supports write with empty content.
     /// </summary>
-    public bool WriteCanEmpty => writeCanEmpty != 0;
+    public bool WriteCanEmpty { get; private set; }
 
     /// <summary>
     /// If operator supports write by append.
     /// </summary>
-    public bool WriteCanAppend => writeCanAppend != 0;
+    public bool WriteCanAppend { get; private set; }
 
     /// <summary>
     /// If operator supports write with content type.
     /// </summary>
-    public bool WriteWithContentType => writeWithContentType != 0;
+    public bool WriteWithContentType { get; private set; }
 
     /// <summary>
     /// If operator supports write with content disposition.
     /// </summary>
-    public bool WriteWithContentDisposition => writeWithContentDisposition != 0;
+    public bool WriteWithContentDisposition { get; private set; }
 
     /// <summary>
     /// If operator supports write with content encoding.
     /// </summary>
-    public bool WriteWithContentEncoding => writeWithContentEncoding != 0;
+    public bool WriteWithContentEncoding { get; private set; }
 
     /// <summary>
     /// If operator supports write with cache control.
     /// </summary>
-    public bool WriteWithCacheControl => writeWithCacheControl != 0;
+    public bool WriteWithCacheControl { get; private set; }
 
     /// <summary>
     /// If operator supports write with if match.
     /// </summary>
-    public bool WriteWithIfMatch => writeWithIfMatch != 0;
+    public bool WriteWithIfMatch { get; private set; }
 
     /// <summary>
     /// If operator supports write with if none match.
     /// </summary>
-    public bool WriteWithIfNoneMatch => writeWithIfNoneMatch != 0;
+    public bool WriteWithIfNoneMatch { get; private set; }
 
     /// <summary>
     /// If operator supports write with if not exists.
     /// </summary>
-    public bool WriteWithIfNotExists => writeWithIfNotExists != 0;
+    public bool WriteWithIfNotExists { get; private set; }
 
     /// <summary>
     /// If operator supports write with user metadata.
     /// </summary>
-    public bool WriteWithUserMetadata => writeWithUserMetadata != 0;
+    public bool WriteWithUserMetadata { get; private set; }
 
     /// <summary>
     /// write_multi_max_size is the max size that services support in write_multi.
     /// </summary>
-    public ulong? WriteMultiMaxSize => writeMultiMaxSize == ulong.MinValue ? null : writeMultiMaxSize;
+    public ulong? WriteMultiMaxSize { get; private set; }
 
     /// <summary>
     /// write_multi_min_size is the min size that services support in write_multi.
     /// </summary>
-    public ulong? WriteMultiMinSize => writeMultiMinSize == ulong.MinValue ? null : writeMultiMinSize;
+    public ulong? WriteMultiMinSize { get; private set; }
 
     /// <summary>
     /// write_total_max_size is the max total size that services support in write.
     /// </summary>
-    public ulong? WriteTotalMaxSize => writeTotalMaxSize == ulong.MinValue ? null : writeTotalMaxSize;
+    public ulong? WriteTotalMaxSize { get; private set; }
 
     /// <summary>
     /// If operator supports create dir.
     /// </summary>
-    public bool CreateDir => createDir != 0;
+    public bool CreateDir { get; private set; }
 
     /// <summary>
     /// If operator supports delete.
     /// </summary>
-    public bool Delete => delete != 0;
+    public bool Delete { get; private set; }
 
     /// <summary>
     /// If operator supports delete with version.
     /// </summary>
-    public bool DeleteWithVersion => deleteWithVersion != 0;
+    public bool DeleteWithVersion { get; private set; }
 
     /// <summary>
     /// If operator supports delete with recursive.
     /// </summary>
-    public bool DeleteWithRecursive => deleteWithRecursive != 0;
+    public bool DeleteWithRecursive { get; private set; }
 
     /// <summary>
     /// delete_max_size is the max size that services support in delete.
     /// </summary>
-    public ulong? DeleteMaxSize => deleteMaxSize == ulong.MinValue ? null : deleteMaxSize;
+    public ulong? DeleteMaxSize { get; private set; }
 
     /// <summary>
     /// If operator supports copy.
     /// </summary>
-    public bool Copy => copy != 0;
+    public bool Copy { get; private set; }
 
     /// <summary>
     /// If operator supports copy with if not exists.
     /// </summary>
-    public bool CopyWithIfNotExists => copyWithIfNotExists != 0;
+    public bool CopyWithIfNotExists { get; private set; }
 
     /// <summary>
     /// If operator supports rename.
     /// </summary>
-    public bool Rename => rename != 0;
+    public bool Rename { get; private set; }
 
     /// <summary>
     /// If operator supports list.
     /// </summary>
-    public bool List => list != 0;
+    public bool List { get; private set; }
 
     /// <summary>
     /// If backend supports list with limit.
     /// </summary>
-    public bool ListWithLimit => listWithLimit != 0;
+    public bool ListWithLimit { get; private set; }
 
     /// <summary>
     /// If backend supports list with start after.
     /// </summary>
-    public bool ListWithStartAfter => listWithStartAfter != 0;
+    public bool ListWithStartAfter { get; private set; }
 
     /// <summary>
     /// If backend supports list with recursive.
     /// </summary>
-    public bool ListWithRecursive => listWithRecursive != 0;
+    public bool ListWithRecursive { get; private set; }
 
     /// <summary>
     /// If backend supports list with versions.
     /// </summary>
-    public bool ListWithVersions => listWithVersions != 0;
+    public bool ListWithVersions { get; private set; }
 
     /// <summary>
     /// If backend supports list with deleted.
     /// </summary>
-    public bool ListWithDeleted => listWithDeleted != 0;
+    public bool ListWithDeleted { get; private set; }
 
     /// <summary>
     /// If operator supports presign.
     /// </summary>
-    public bool Presign => presign != 0;
+    public bool Presign { get; private set; }
 
     /// <summary>
     /// If operator supports presign read.
     /// </summary>
-    public bool PresignRead => presignRead != 0;
+    public bool PresignRead { get; private set; }
 
     /// <summary>
     /// If operator supports presign stat.
     /// </summary>
-    public bool PresignStat => presignStat != 0;
+    public bool PresignStat { get; private set; }
 
     /// <summary>
     /// If operator supports presign write.
     /// </summary>
-    public bool PresignWrite => presignWrite != 0;
+    public bool PresignWrite { get; private set; }
 
     /// <summary>
     /// If operator supports presign delete.
     /// </summary>
-    public bool PresignDelete => presignDelete != 0;
+    public bool PresignDelete { get; private set; }
 
     /// <summary>
     /// If operator supports shared.
     /// </summary>
-    public bool Shared => shared != 0;
+    public bool Shared { get; private set; }
 }

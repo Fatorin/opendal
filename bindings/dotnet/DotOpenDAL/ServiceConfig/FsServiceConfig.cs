@@ -23,9 +23,18 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service fs.
+    /// </summary>
     public sealed class FsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// tmp dir for atomic write
+        /// </summary>
         public string? AtomicWriteDir { get; init; }
+        /// <summary>
+        /// root dir for backend
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "fs";

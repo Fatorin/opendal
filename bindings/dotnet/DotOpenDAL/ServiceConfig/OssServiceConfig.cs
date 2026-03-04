@@ -23,27 +23,90 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service oss.
+    /// </summary>
     public sealed class OssServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Access key id for oss. this field if it's is_some env value: [ALIBABA_CLOUD_ACCESS_KEY_ID]
+        /// </summary>
         public string? AccessKeyId { get; init; }
+        /// <summary>
+        /// Access key secret for oss. this field if it's is_some env value: [ALIBABA_CLOUD_ACCESS_KEY_SECRET]
+        /// </summary>
         public string? AccessKeySecret { get; init; }
+        /// <summary>
+        /// Addressing style for oss.
+        /// </summary>
         public string? AddressingStyle { get; init; }
+        /// <summary>
+        /// Allow anonymous for oss.
+        /// </summary>
         public bool? AllowAnonymous { get; init; }
+        /// <summary>
+        /// The size of max batch operations.
+        /// </summary>
         public long? BatchMaxOperations { get; init; }
+        /// <summary>
+        /// Bucket for oss.
+        /// </summary>
         public string? Bucket { get; init; }
+        /// <summary>
+        /// The size of max delete operations.
+        /// </summary>
         public long? DeleteMaxSize { get; init; }
+        /// <summary>
+        /// is bucket versioning enabled for this bucket
+        /// </summary>
         public bool? EnableVersioning { get; init; }
+        /// <summary>
+        /// Endpoint for oss.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// oidc_provider_arn will be loaded from this field if it's is_some env value: [ALIBABA_CLOUD_OIDC_PROVIDER_ARN]
+        /// </summary>
         public string? OidcProviderArn { get; init; }
+        /// <summary>
+        /// oidc_token_file will be loaded from this field if it's is_some env value: [ALIBABA_CLOUD_OIDC_TOKEN_FILE]
+        /// </summary>
         public string? OidcTokenFile { get; init; }
+        /// <summary>
+        /// Pre sign addressing style for oss.
+        /// </summary>
         public string? PresignAddressingStyle { get; init; }
+        /// <summary>
+        /// Presign endpoint for oss.
+        /// </summary>
         public string? PresignEndpoint { get; init; }
+        /// <summary>
+        /// If role_arn is set, we will use already known config as source credential to assume role with role_arn. this field if it's is_some env value: [ALIBABA_CLOUD_ROLE_ARN]
+        /// </summary>
         public string? RoleArn { get; init; }
+        /// <summary>
+        /// role_session_name for this backend.
+        /// </summary>
         public string? RoleSessionName { get; init; }
+        /// <summary>
+        /// Root for oss.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// security_token will be loaded from this field if it's is_some env value: [ALIBABA_CLOUD_SECURITY_TOKEN]
+        /// </summary>
         public string? SecurityToken { get; init; }
+        /// <summary>
+        /// Server side encryption for oss.
+        /// </summary>
         public string? ServerSideEncryption { get; init; }
+        /// <summary>
+        /// Server side encryption key id for oss.
+        /// </summary>
         public string? ServerSideEncryptionKeyId { get; init; }
+        /// <summary>
+        /// sts_endpoint will be loaded from this field if it's is_some env value: [ALIBABA_CLOUD_STS_ENDPOINT]
+        /// </summary>
         public string? StsEndpoint { get; init; }
 
         public string Scheme => "oss";

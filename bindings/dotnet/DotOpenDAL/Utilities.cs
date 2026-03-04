@@ -22,8 +22,21 @@ using System.Globalization;
 
 namespace DotOpenDAL;
 
+/// <summary>
+/// Shared utility helpers for UTF-8 marshalling and option value formatting.
+/// </summary>
 public static class Utilities
 {
+	/// <summary>
+	/// Decodes an unmanaged UTF-8 message pointer and returns null for null pointers.
+	/// </summary>
+	/// <param name="message">Pointer to an unmanaged UTF-8 message buffer.</param>
+	/// <returns>The decoded message, or <see langword="null"/> when the pointer is null.</returns>
+	public static string? ReadNullableUtf8(IntPtr message)
+	{
+		return message == IntPtr.Zero ? null : ReadUtf8(message);
+	}
+
 	/// <summary>
 	/// Decodes an unmanaged UTF-8 message pointer into managed text.
 	/// </summary>

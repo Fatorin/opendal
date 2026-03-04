@@ -51,6 +51,7 @@ public sealed class ListOptions : IOptions
         return NativeOptionsBuilder.BuildNativeOptionsHandle(
             nativeOptions,
             NativeMethods.list_option_build,
-            NativeMethods.list_option_free);
+            NativeMethods.list_option_free
+        );
     }
 }

@@ -93,12 +93,3 @@ public sealed class AsyncState<T>
         }, this);
     }
 }
-
-internal interface IAsyncCallbackResult<out TOutput>
-{
-    OpenDALError GetError();
-
-    TOutput ToValue();
-
-    void Release();
-}

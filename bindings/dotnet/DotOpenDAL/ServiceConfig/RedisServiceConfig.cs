@@ -23,15 +23,42 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service redis.
+    /// </summary>
     public sealed class RedisServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// network address of the Redis cluster service. Can be "tcp://127.0.0.1:6379,tcp://127.0.0.1:6380,tcp://127.0.0.1:6381", e.g. default is None
+        /// </summary>
         public string? ClusterEndpoints { get; init; }
+        /// <summary>
+        /// The maximum number of connections allowed. default is 10
+        /// </summary>
         public int? ConnectionPoolMaxSize { get; init; }
+        /// <summary>
+        /// the number of DBs redis can take is unlimited default is db 0
+        /// </summary>
         public long Db { get; init; }
+        /// <summary>
+        /// The default ttl for put operations.
+        /// </summary>
         public string? DefaultTtl { get; init; }
+        /// <summary>
+        /// network address of the Redis service. Can be "tcp://127.0.0.1:6379", e.g. default is "tcp://127.0.0.1:6379"
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// the password for authentication default is None
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// the working directory of the Redis service. Can be "/path/to/dir" default is "/"
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// the username to connect redis service. default is None
+        /// </summary>
         public string? Username { get; init; }
 
         public string Scheme => "redis";

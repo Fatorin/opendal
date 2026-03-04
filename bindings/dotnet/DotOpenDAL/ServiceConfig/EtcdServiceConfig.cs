@@ -23,14 +23,38 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service etcd.
+    /// </summary>
     public sealed class EtcdServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// certificate authority file path default is None
+        /// </summary>
         public string? CaPath { get; init; }
+        /// <summary>
+        /// cert path default is None
+        /// </summary>
         public string? CertPath { get; init; }
+        /// <summary>
+        /// network address of the Etcd services. If use https, must set TLS options: ca_path, cert_path, key_path. e.g. "127.0.0.1:23790,127.0.0.1:23791,127.0.0.1:23792" or "http://127.0.0.1:23790,http://127.0.0.1:23791,http://127.0.0.1:23792" or "https://127.0.0.1:23790,https://127.0.0.1:23791,https://127.0.0.1:23792" default is "http://127.0.0.1:2379"
+        /// </summary>
         public string? Endpoints { get; init; }
+        /// <summary>
+        /// key path default is None
+        /// </summary>
         public string? KeyPath { get; init; }
+        /// <summary>
+        /// the password for authentication default is None
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// the working directory of the etcd service. Can be "/path/to/dir" default is "/"
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// the username to connect etcd service. default is None
+        /// </summary>
         public string? Username { get; init; }
 
         public string Scheme => "etcd";

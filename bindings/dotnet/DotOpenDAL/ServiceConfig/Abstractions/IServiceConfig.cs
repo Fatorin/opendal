@@ -19,9 +19,19 @@
 
 namespace DotOpenDAL.ServiceConfig.Abstractions;
 
+/// <summary>
+/// Represents a typed backend configuration that can be converted to OpenDAL options.
+/// </summary>
 public interface IServiceConfig
 {
+    /// <summary>
+    /// Gets backend scheme name, such as <c>memory</c> or <c>fs</c>.
+    /// </summary>
     string Scheme { get; }
 
+    /// <summary>
+    /// Converts this configuration into key/value options passed to native OpenDAL.
+    /// </summary>
+    /// <returns>Backend-specific option map.</returns>
     IReadOnlyDictionary<string, string> ToOptions();
 }

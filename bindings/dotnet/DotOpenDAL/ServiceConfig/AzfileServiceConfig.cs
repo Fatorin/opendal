@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service azfile.
+    /// </summary>
     public sealed class AzfileServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The account key for azfile.
+        /// </summary>
         public string? AccountKey { get; init; }
+        /// <summary>
+        /// The account name for azfile.
+        /// </summary>
         public string? AccountName { get; init; }
+        /// <summary>
+        /// The endpoint for azfile.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// The root path for azfile.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The sas token for azfile.
+        /// </summary>
         public string? SasToken { get; init; }
+        /// <summary>
+        /// The share name for azfile.
+        /// </summary>
         public string? ShareName { get; init; }
 
         public string Scheme => "azfile";

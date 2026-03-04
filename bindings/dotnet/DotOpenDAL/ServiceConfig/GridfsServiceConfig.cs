@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service gridfs.
+    /// </summary>
     public sealed class GridfsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The bucket name of the MongoDB GridFs service to read/write.
+        /// </summary>
         public string? Bucket { get; init; }
+        /// <summary>
+        /// The chunk size of the MongoDB GridFs service used to break the user file into chunks.
+        /// </summary>
         public int? ChunkSize { get; init; }
+        /// <summary>
+        /// The connection string of the MongoDB service.
+        /// </summary>
         public string? ConnectionString { get; init; }
+        /// <summary>
+        /// The database name of the MongoDB GridFs service to read/write.
+        /// </summary>
         public string? Database { get; init; }
+        /// <summary>
+        /// The working directory, all operations will be performed under it.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "gridfs";

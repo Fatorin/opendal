@@ -23,14 +23,38 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service d1.
+    /// </summary>
     public sealed class D1ServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Set the account id of cloudflare api.
+        /// </summary>
         public string? AccountId { get; init; }
+        /// <summary>
+        /// Set the database id of cloudflare api.
+        /// </summary>
         public string? DatabaseId { get; init; }
+        /// <summary>
+        /// Set the key field of D1 Database.
+        /// </summary>
         public string? KeyField { get; init; }
+        /// <summary>
+        /// Set the working directory of OpenDAL.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Set the table of D1 Database.
+        /// </summary>
         public string? Table { get; init; }
+        /// <summary>
+        /// Set the token of cloudflare api.
+        /// </summary>
         public string? Token { get; init; }
+        /// <summary>
+        /// Set the value field of D1 Database.
+        /// </summary>
         public string? ValueField { get; init; }
 
         public string Scheme => "d1";

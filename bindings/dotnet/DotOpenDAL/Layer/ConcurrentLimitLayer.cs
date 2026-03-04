@@ -21,10 +21,20 @@ using DotOpenDAL.Layer.Abstractions;
 
 namespace DotOpenDAL.Layer;
 
+/// <summary>
+/// Layer that limits concurrent operations on an operator.
+/// </summary>
 public sealed class ConcurrentLimitLayer : ILayer
 {
+    /// <summary>
+    /// Gets maximum concurrent permits.
+    /// </summary>
     public nuint Permits { get; }
 
+    /// <summary>
+    /// Creates a concurrent-limit layer.
+    /// </summary>
+    /// <param name="permits">Maximum number of concurrent permits. Must be greater than zero.</param>
     public ConcurrentLimitLayer(nuint permits)
     {
         if (permits == 0)
@@ -34,6 +44,11 @@ public sealed class ConcurrentLimitLayer : ILayer
         Permits = permits;
     }
 
+    /// <summary>
+    /// Applies concurrent-limit behavior to the specified operator.
+    /// </summary>
+    /// <param name="op">Operator to layer.</param>
+    /// <returns>The layered operator instance.</returns>
     public Operator Apply(Operator op)
     {
         ArgumentNullException.ThrowIfNull(op);

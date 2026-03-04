@@ -23,14 +23,38 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service cos.
+    /// </summary>
     public sealed class CosServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Bucket of this backend.
+        /// </summary>
         public string? Bucket { get; init; }
+        /// <summary>
+        /// Disable config load so that opendal will not load config from
+        /// </summary>
         public bool? DisableConfigLoad { get; init; }
+        /// <summary>
+        /// is bucket versioning enabled for this bucket
+        /// </summary>
         public bool? EnableVersioning { get; init; }
+        /// <summary>
+        /// Endpoint of this backend.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// Root of this backend.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Secret ID of this backend.
+        /// </summary>
         public string? SecretId { get; init; }
+        /// <summary>
+        /// Secret key of this backend.
+        /// </summary>
         public string? SecretKey { get; init; }
 
         public string Scheme => "cos";

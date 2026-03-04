@@ -23,9 +23,18 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service vercel_blob.
+    /// </summary>
     public sealed class VercelBlobServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// vercel blob token.
+        /// </summary>
         public string? Token { get; init; }
 
         public string Scheme => "vercel_blob";

@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service cloudflare_kv.
+    /// </summary>
     public sealed class CloudflareKvServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The account ID used to authenticate with CloudFlare. Used as URI path parameter.
+        /// </summary>
         public string? AccountId { get; init; }
+        /// <summary>
+        /// The token used to authenticate with CloudFlare.
+        /// </summary>
         public string? ApiToken { get; init; }
+        /// <summary>
+        /// The default ttl for write operations.
+        /// </summary>
         public string? DefaultTtl { get; init; }
+        /// <summary>
+        /// The namespace ID. Used as URI path parameter.
+        /// </summary>
         public string? NamespaceId { get; init; }
+        /// <summary>
+        /// Root within this backend.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "cloudflare_kv";

@@ -23,8 +23,14 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service vercel_artifacts.
+    /// </summary>
     public sealed class VercelArtifactsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The access token for Vercel.
+        /// </summary>
         public string? AccessToken { get; init; }
 
         public string Scheme => "vercel_artifacts";

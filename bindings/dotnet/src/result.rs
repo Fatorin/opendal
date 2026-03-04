@@ -187,28 +187,24 @@ fn release_error_message(error: &mut OpenDALError) {
     error.message = std::ptr::null_mut();
 }
 
+/// Release an error message allocated by this FFI layer.
+///
+/// This function only releases `OpenDALError.message` and does not touch any
+/// payload pointer carried by result structs.
 #[unsafe(no_mangle)]
-pub extern "C" fn opendal_result_release(mut result: OpendalResult) {
-    release_error_message(&mut result.error);
+pub extern "C" fn opendal_error_release(mut error: OpenDALError) {
+    release_error_message(&mut error);
 }
 
+/// Release an operator-info result payload and its error message.
+///
+/// This function is idempotent for null payload pointers.
+/// # Safety
+///
+/// - `result.ptr`, when non-null, must come from `operator_info_get`.
+/// - The payload pointer must not be used after this call.
 #[unsafe(no_mangle)]
-pub extern "C" fn opendal_operator_result_release(mut result: OpendalOperatorResult) {
-    release_error_message(&mut result.error);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn opendal_options_result_release(mut result: OpendalOptionsResult) {
-    release_error_message(&mut result.error);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn opendal_executor_result_release(mut result: OpendalExecutorResult) {
-    release_error_message(&mut result.error);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opendal_operator_info_result_release(mut result: OpendalOperatorInfoResult) {
+pub extern "C" fn opendal_operator_info_result_release(mut result: OpendalOperatorInfoResult) {
     if !result.ptr.is_null() {
         unsafe {
             operator_info_free(result.ptr.cast());
@@ -218,8 +214,16 @@ pub unsafe extern "C" fn opendal_operator_info_result_release(mut result: Openda
     release_error_message(&mut result.error);
 }
 
+/// Release a metadata result payload and its error message.
+///
+/// This function is idempotent for null payload pointers.
+/// # Safety
+///
+/// - `result.ptr`, when non-null, must come from metadata-producing APIs in
+///   this crate.
+/// - The payload pointer must not be used after this call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn opendal_metadata_result_release(mut result: OpendalMetadataResult) {
+pub extern "C" fn opendal_metadata_result_release(mut result: OpendalMetadataResult) {
     if !result.ptr.is_null() {
         unsafe {
             metadata_free(result.ptr.cast());
@@ -229,8 +233,16 @@ pub unsafe extern "C" fn opendal_metadata_result_release(mut result: OpendalMeta
     release_error_message(&mut result.error);
 }
 
+/// Release an entry-list result payload and its error message.
+///
+/// This function is idempotent for null payload pointers.
+/// # Safety
+///
+/// - `result.ptr`, when non-null, must come from list-producing APIs in this
+///   crate.
+/// - The payload pointer must not be used after this call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn opendal_entry_list_result_release(mut result: OpendalEntryListResult) {
+pub extern "C" fn opendal_entry_list_result_release(mut result: OpendalEntryListResult) {
     if !result.ptr.is_null() {
         unsafe {
             entry_list_free(result.ptr.cast());
@@ -240,8 +252,15 @@ pub unsafe extern "C" fn opendal_entry_list_result_release(mut result: OpendalEn
     release_error_message(&mut result.error);
 }
 
+/// Release a read result buffer and its error message.
+///
+/// This function is idempotent for empty/null buffers.
+/// # Safety
+///
+/// - `result.buffer` must originate from `ByteBuffer::from_vec` in this crate.
+/// - The buffer memory must not be accessed after this call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn opendal_read_result_release(mut result: OpendalReadResult) {
+pub extern "C" fn opendal_read_result_release(mut result: OpendalReadResult) {
     if !result.buffer.data.is_null() {
         unsafe {
             buffer_free(result.buffer.data, result.buffer.len, result.buffer.capacity);

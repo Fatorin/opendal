@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service lakefs.
+    /// </summary>
     public sealed class LakefsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Name of the branch or a commit ID. Default is main. This is optional.
+        /// </summary>
         public string? Branch { get; init; }
+        /// <summary>
+        /// Base url. This is required.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// Password for Lakefs basic authentication. This is required.
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// The repository name This is required.
+        /// </summary>
         public string? Repository { get; init; }
+        /// <summary>
+        /// Root of this backend. Can be "/path/to/dir". Default is "/".
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Username for Lakefs basic authentication. This is required.
+        /// </summary>
         public string? Username { get; init; }
 
         public string Scheme => "lakefs";

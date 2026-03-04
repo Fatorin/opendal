@@ -23,10 +23,22 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service persy.
+    /// </summary>
     public sealed class PersyServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// That path to the persy data file. The directory in the path must already exist.
+        /// </summary>
         public string? Datafile { get; init; }
+        /// <summary>
+        /// That name of the persy index.
+        /// </summary>
         public string? Index { get; init; }
+        /// <summary>
+        /// That name of the persy segment.
+        /// </summary>
         public string? Segment { get; init; }
 
         public string Scheme => "persy";

@@ -23,11 +23,26 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service ghac.
+    /// </summary>
     public sealed class GhacServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// The endpoint for ghac service.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// The root path for ghac.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The runtime token for ghac service.
+        /// </summary>
         public string? RuntimeToken { get; init; }
+        /// <summary>
+        /// The version that used by cache.
+        /// </summary>
         public string? Version { get; init; }
 
         public string Scheme => "ghac";

@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service dropbox.
+    /// </summary>
     public sealed class DropboxServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// access token for dropbox.
+        /// </summary>
         public string? AccessToken { get; init; }
+        /// <summary>
+        /// client_id for dropbox.
+        /// </summary>
         public string? ClientId { get; init; }
+        /// <summary>
+        /// client_secret for dropbox.
+        /// </summary>
         public string? ClientSecret { get; init; }
+        /// <summary>
+        /// refresh_token for dropbox.
+        /// </summary>
         public string? RefreshToken { get; init; }
+        /// <summary>
+        /// root path for dropbox.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "dropbox";

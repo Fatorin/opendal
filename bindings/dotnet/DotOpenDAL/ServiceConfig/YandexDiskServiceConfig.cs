@@ -23,9 +23,18 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service yandex_disk.
+    /// </summary>
     public sealed class YandexDiskServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// yandex disk oauth access_token.
+        /// </summary>
         public string? AccessToken { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "yandex_disk";

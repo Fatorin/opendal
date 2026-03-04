@@ -19,6 +19,8 @@
 
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using DotOpenDAL.Interop.Result;
+using DotOpenDAL.Interop.Result.Abstractions;
 using DotOpenDAL.Layer.Abstractions;
 using DotOpenDAL.Options;
 using DotOpenDAL.Options.Abstractions;
@@ -66,8 +68,13 @@ public partial class Operator : SafeHandle
     /// <summary>
     /// Creates an operator for the specified backend scheme and options.
     /// </summary>
-    /// <param name="scheme">Backend scheme, such as <c>fs</c> or <c>memory</c>.</param>
-    /// <param name="options">Backend-specific key/value options.</param>
+    /// <remarks>
+    /// Available scheme names are defined by OpenDAL.
+    /// See <see href="https://docs.rs/opendal/latest/opendal/enum.Scheme.html">OpenDAL Scheme documentation</see>
+    /// for supported backends and their related configuration options.
+    /// </remarks>
+    /// <param name="scheme">Name of the backend service, such as <c>fs</c> or <c>memory</c>.</param>
+    /// <param name="options">Key/value options used to configure the selected backend service.</param>
     /// <exception cref="ArgumentException"><paramref name="scheme"/> is null, empty, or whitespace.</exception>
     /// <exception cref="OpenDALException">Native operator construction fails.</exception>
     public Operator(string scheme, IReadOnlyDictionary<string, string>? options = null) : base(IntPtr.Zero, true)
@@ -77,26 +84,17 @@ public partial class Operator : SafeHandle
 
         using var nativeOptionsHandle = CreateConstructorOptionsHandle(options);
         var result = NativeMethods.operator_construct(scheme, GetOptionsHandle(nativeOptionsHandle));
-
-        try
-        {
-            if (result.Ptr == IntPtr.Zero)
-            {
-                throw new OpenDALException(result.Error);
-            }
-
-            SetHandle(result.Ptr);
-        }
-        finally
-        {
-            result.Release();
-        }
+        SetHandle(ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result));
     }
 
     /// <summary>
     /// Creates an operator from a typed service configuration.
     /// </summary>
-    /// <param name="config">Typed service configuration.</param>
+    /// <remarks>
+    /// This overload converts <paramref name="config"/> into backend key/value options internally,
+    /// then creates the same native operator as <see cref="Operator(string, IReadOnlyDictionary{string, string}?)"/>.
+    /// </remarks>
+    /// <param name="config">Typed service configuration for the target backend service.</param>
     /// <exception cref="ArgumentNullException"><paramref name="config"/> is null.</exception>
     /// <exception cref="OpenDALException">Native operator construction fails.</exception>
     public Operator(IServiceConfig config) : this(
@@ -180,7 +178,7 @@ public partial class Operator : SafeHandle
             GetOptionsHandle(nativeOptionsHandle)
         );
 
-        ToValueOrThrowAndRelease<bool, OpenDALResult>(result);
+        ThrowIfErrorAndRelease(result);
     }
 
     /// <summary>
@@ -269,7 +267,8 @@ public partial class Operator : SafeHandle
                     (nuint)content.Length,
                     optionsHandle,
                     &OnWriteCompleted,
-                    context);
+                    context
+                );
             }
         }
     }
@@ -399,7 +398,8 @@ public partial class Operator : SafeHandle
                     path,
                     optionsHandle,
                     &OnReadCompleted,
-                    context);
+                    context
+                );
             }
         }
     }
@@ -478,7 +478,8 @@ public partial class Operator : SafeHandle
                     path,
                     optionsHandle,
                     &OnStatCompleted,
-                    context);
+                    context
+                );
             }
         }
     }
@@ -557,7 +558,8 @@ public partial class Operator : SafeHandle
                     path,
                     optionsHandle,
                     &OnListCompleted,
-                    context);
+                    context
+                );
             }
         }
     }
@@ -572,37 +574,39 @@ public partial class Operator : SafeHandle
         return true;
     }
 
+    /// <summary>
+    /// Applies a native layer result by swapping the current operator handle with the returned handle.
+    /// </summary>
+    /// <param name="result">Native result that contains a new operator pointer.</param>
+    /// <returns>This operator instance with updated native handle.</returns>
+    /// <exception cref="InvalidOperationException">Returned operator pointer is null.</exception>
+    /// <exception cref="OpenDALException">Native layer application fails.</exception>
     internal Operator ApplyLayerResult(OpenDALOperatorResult result)
     {
-        try
+        var newHandle = ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result);
+        if (newHandle == IntPtr.Zero)
         {
-            if (result.Error.IsError)
-            {
-                throw new OpenDALException(result.Error);
-            }
-
-            if (result.Ptr == IntPtr.Zero)
-            {
-                throw new InvalidOperationException("Layer application returned null operator pointer");
-            }
-
-            var oldHandle = handle;
-            SetHandle(result.Ptr);
-            info = CreateInfoLazy();
-
-            if (oldHandle != IntPtr.Zero)
-            {
-                NativeMethods.operator_free(oldHandle);
-            }
-
-            return this;
+            throw new InvalidOperationException("Layer application returned null operator pointer");
         }
-        finally
+
+        var oldHandle = handle;
+        SetHandle(newHandle);
+        info = CreateInfoLazy();
+
+        if (oldHandle != IntPtr.Zero)
         {
-            result.Release();
+            NativeMethods.operator_free(oldHandle);
         }
+
+        return this;
     }
 
+    /// <summary>
+    /// Gets the native executor handle for operation submission.
+    /// </summary>
+    /// <param name="executor">Executor instance or <see langword="null"/> to use default executor.</param>
+    /// <returns>Native executor pointer, or <see cref="IntPtr.Zero"/> when no executor is specified.</returns>
+    /// <exception cref="ObjectDisposedException">The executor has already been disposed.</exception>
     private static IntPtr GetExecutorHandle(Executor? executor)
     {
         if (executor is null)
@@ -614,16 +618,30 @@ public partial class Operator : SafeHandle
         return executor.DangerousGetHandle();
     }
 
+    /// <summary>
+    /// Gets the native options pointer from an optional native options handle.
+    /// </summary>
+    /// <param name="options">Native options handle or <see langword="null"/>.</param>
+    /// <returns>Native options pointer, or <see cref="IntPtr.Zero"/> when options are not provided.</returns>
     private static IntPtr GetOptionsHandle(NativeOptionsHandle? options)
     {
         return options is null ? IntPtr.Zero : options.DangerousGetHandle();
     }
 
+    /// <summary>
+    /// Creates the lazily-evaluated operator info loader.
+    /// </summary>
+    /// <returns>A thread-safe lazy loader for <see cref="OperatorInfo"/>.</returns>
     private Lazy<OperatorInfo> CreateInfoLazy()
     {
         return new Lazy<OperatorInfo>(CreateOperatorInfo, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
+    /// <summary>
+    /// Retrieves operator info from the native layer.
+    /// </summary>
+    /// <returns>Managed operator info value.</returns>
+    /// <exception cref="OpenDALException">Native operator info retrieval fails.</exception>
     private OperatorInfo CreateOperatorInfo()
     {
         var result = NativeMethods.operator_info_get(this);
@@ -631,6 +649,11 @@ public partial class Operator : SafeHandle
         return ToValueOrThrowAndRelease<OperatorInfo, OpenDALOperatorInfoResult>(result);
     }
 
+    /// <summary>
+    /// Builds constructor options for operator creation when key/value options are provided.
+    /// </summary>
+    /// <param name="options">Backend options dictionary.</param>
+    /// <returns>Native options handle, or <see langword="null"/> when options are empty.</returns>
     private static NativeOptionsHandle? CreateConstructorOptionsHandle(IReadOnlyDictionary<string, string>? options)
     {
         if (options is null || options.Count == 0)
@@ -641,11 +664,20 @@ public partial class Operator : SafeHandle
         return NativeOptionsBuilder.BuildNativeOptionsHandle(
             options,
             NativeMethods.constructor_option_build,
-            NativeMethods.constructor_option_free);
+            NativeMethods.constructor_option_free
+        );
     }
 
+    /// <summary>
+    /// Converts a native result into a managed value, throwing on native error and always releasing native resources.
+    /// </summary>
+    /// <typeparam name="TOutput">Managed output type.</typeparam>
+    /// <typeparam name="TResult">Native result type.</typeparam>
+    /// <param name="result">Native result payload.</param>
+    /// <returns>Managed value converted from <paramref name="result"/>.</returns>
+    /// <exception cref="OpenDALException">Native operation returns an error.</exception>
     internal static TOutput ToValueOrThrowAndRelease<TOutput, TResult>(TResult result)
-        where TResult : struct, IAsyncCallbackResult<TOutput>
+        where TResult : struct, INativeValueResult<TOutput>
     {
         try
         {
@@ -663,6 +695,40 @@ public partial class Operator : SafeHandle
         }
     }
 
+    /// <summary>
+    /// Throws when a native result reports an error and always releases native resources.
+    /// </summary>
+    /// <typeparam name="TResult">Native result type.</typeparam>
+    /// <param name="result">Native result payload.</param>
+    /// <exception cref="OpenDALException">Native operation returns an error.</exception>
+    internal static void ThrowIfErrorAndRelease<TResult>(TResult result)
+        where TResult : struct, INativeResult
+    {
+        try
+        {
+            var error = result.GetError();
+            if (error.IsError)
+            {
+                throw new OpenDALException(error);
+            }
+        }
+        finally
+        {
+            result.Release();
+        }
+    }
+
+    /// <summary>
+    /// Submits a native async operation and binds it to a managed task completion source.
+    /// </summary>
+    /// <typeparam name="TOutput">Managed task result type.</typeparam>
+    /// <typeparam name="TOptions">Managed options type.</typeparam>
+    /// <param name="options">Optional managed options for this operation.</param>
+    /// <param name="submit">Submission delegate that invokes the native async API.</param>
+    /// <param name="cancellationToken">Cancellation token for managed task observation.</param>
+    /// <returns>A task completed by the corresponding native callback.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
+    /// <exception cref="OpenDALException">Native submission returns an immediate error.</exception>
     internal static Task<TOutput> SubmitAsyncOperation<TOutput, TOptions>(
         TOptions? options,
         Func<long, IntPtr, OpenDALResult> submit,
@@ -675,7 +741,7 @@ public partial class Operator : SafeHandle
         {
             using var nativeOptionsHandle = options?.BuildNativeOptionsHandle();
             var submitResult = submit(context, GetOptionsHandle(nativeOptionsHandle));
-            ToValueOrThrowAndRelease<bool, OpenDALResult>(submitResult);
+            ThrowIfErrorAndRelease(submitResult);
             asyncState.BindCancellation(cancellationToken);
             return asyncState.Completion.Task;
         }
@@ -686,6 +752,13 @@ public partial class Operator : SafeHandle
         }
     }
 
+    /// <summary>
+    /// Attempts to retrieve and remove async state for a callback context.
+    /// </summary>
+    /// <typeparam name="T">Async state result type.</typeparam>
+    /// <param name="context">Native callback context id.</param>
+    /// <param name="state">Resolved async state when found.</param>
+    /// <returns><see langword="true"/> if an async state is found; otherwise <see langword="false"/>.</returns>
     private static bool TryTakeAsyncState<T>(long context, [NotNullWhen(true)] out AsyncState<T>? state)
     {
         if (AsyncStateRegistry.TryTake<AsyncState<T>>(context, out var current))
@@ -698,8 +771,15 @@ public partial class Operator : SafeHandle
         return false;
     }
 
+    /// <summary>
+    /// Completes a value-producing async state from a native callback result.
+    /// </summary>
+    /// <typeparam name="TOutput">Managed output type.</typeparam>
+    /// <typeparam name="TResult">Native result type.</typeparam>
+    /// <param name="context">Native callback context id.</param>
+    /// <param name="result">Native callback result payload.</param>
     private static void CompleteAsyncState<TOutput, TResult>(long context, TResult result)
-        where TResult : struct, IAsyncCallbackResult<TOutput>
+        where TResult : struct, INativeValueResult<TOutput>
     {
         if (!TryTakeAsyncState(context, out AsyncState<TOutput>? state))
         {
@@ -724,12 +804,71 @@ public partial class Operator : SafeHandle
         }
     }
 
+    /// <summary>
+    /// Completes a non-value async state from a native callback result.
+    /// </summary>
+    /// <typeparam name="TResult">Native result type.</typeparam>
+    /// <param name="context">Native callback context id.</param>
+    /// <param name="result">Native callback result payload.</param>
+    private static void CompleteAsyncState<TResult>(long context, TResult result)
+        where TResult : struct, INativeResult
+    {
+        if (!TryTakeAsyncState(context, out AsyncState<bool>? state))
+        {
+            return;
+        }
+
+        try
+        {
+            state.CancellationRegistration.Dispose();
+
+            var error = result.GetError();
+            if (error.IsError)
+            {
+                state.Completion.TrySetException(new OpenDALException(error));
+                return;
+            }
+
+            state.Completion.TrySetResult(true);
+        }
+        catch (Exception ex)
+        {
+            state.Completion.TrySetException(ex);
+        }
+    }
+
+    /// <summary>
+    /// Finalizes a value-producing native callback by completing managed state and releasing native resources.
+    /// </summary>
+    /// <typeparam name="TOutput">Managed output type.</typeparam>
+    /// <typeparam name="TResult">Native result type.</typeparam>
+    /// <param name="context">Native callback context id.</param>
+    /// <param name="result">Native callback result payload.</param>
     internal static void CompleteAsyncCallback<TOutput, TResult>(long context, TResult result)
-        where TResult : struct, IAsyncCallbackResult<TOutput>
+        where TResult : struct, INativeValueResult<TOutput>
     {
         try
         {
             CompleteAsyncState<TOutput, TResult>(context, result);
+        }
+        finally
+        {
+            result.Release();
+        }
+    }
+
+    /// <summary>
+    /// Finalizes a non-value native callback by completing managed state and releasing native resources.
+    /// </summary>
+    /// <typeparam name="TResult">Native result type.</typeparam>
+    /// <param name="context">Native callback context id.</param>
+    /// <param name="result">Native callback result payload.</param>
+    internal static void CompleteAsyncCallback<TResult>(long context, TResult result)
+        where TResult : struct, INativeResult
+    {
+        try
+        {
+            CompleteAsyncState(context, result);
         }
         finally
         {
@@ -747,7 +886,7 @@ public partial class Operator : SafeHandle
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnWriteCompleted(long context, OpenDALResult result)
     {
-        CompleteAsyncCallback<bool, OpenDALResult>(context, result);
+        CompleteAsyncCallback(context, result);
     }
 
     /// <summary>

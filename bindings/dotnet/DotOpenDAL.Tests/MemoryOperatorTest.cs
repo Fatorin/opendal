@@ -192,9 +192,11 @@ public class MemoryOperatorTest
         cts.Cancel();
 
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-            await op.WriteAsync("test-cancel-write", [1, 2, 3], cts.Token));
+            await op.WriteAsync("test-cancel-write", [1, 2, 3], cts.Token)
+        );
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-            await op.ReadAsync("test-cancel-read", cts.Token));
+            await op.ReadAsync("test-cancel-read", cts.Token)
+        );
     }
 
     [Fact]
@@ -365,7 +367,8 @@ public class MemoryOperatorTest
             op.Write("if-not-exists", System.Text.Encoding.UTF8.GetBytes("second"), new WriteOptions
             {
                 IfNotExists = true,
-            }));
+            })
+        );
 
         Assert.Equal(ErrorCode.ConditionNotMatch, ex.Code);
     }
@@ -411,7 +414,8 @@ public class MemoryOperatorTest
             op.Stat("stat-condition", new StatOptions
             {
                 IfModifiedSince = DateTimeOffset.UtcNow.AddDays(1),
-            }));
+            })
+        );
 
         Assert.Equal(ErrorCode.ConditionNotMatch, ex.Code);
     }

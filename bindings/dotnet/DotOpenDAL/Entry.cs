@@ -17,9 +17,6 @@
  * under the License.
  */
 
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
-
 namespace DotOpenDAL;
 
 /// <summary>
@@ -33,57 +30,13 @@ public sealed class Entry
         Metadata = metadata;
     }
 
+    /// <summary>
+    /// Gets entry path returned by the backend.
+    /// </summary>
     public string Path { get; }
 
+    /// <summary>
+    /// Gets metadata associated with this entry.
+    /// </summary>
     public Metadata Metadata { get; }
-
-    internal static unsafe IReadOnlyList<Entry> FromNativePointer(IntPtr ptr)
-    {
-        if (ptr == IntPtr.Zero)
-        {
-            return Array.Empty<Entry>();
-        }
-
-        var payload = Unsafe.Read<OpenDALEntryList>((void*)ptr);
-        var count = checked((int)payload.Len);
-        var results = new List<Entry>(count);
-
-        if (payload.Entries == IntPtr.Zero)
-        {
-            return results;
-        }
-
-        var entryPointers = new ReadOnlySpan<IntPtr>((void*)payload.Entries, count);
-        for (var index = 0; index < count; index++)
-        {
-            var entryPtr = entryPointers[index];
-            if (entryPtr == IntPtr.Zero)
-            {
-                continue;
-            }
-
-            var entryPayload = Unsafe.Read<OpenDALEntry>((void*)entryPtr);
-            if (entryPayload.Metadata == IntPtr.Zero)
-            {
-                continue;
-            }
-
-            var path = Utilities.ReadUtf8(entryPayload.Path);
-            var metadataPayload = Unsafe.Read<OpenDALMetadata>((void*)entryPayload.Metadata);
-            results.Add(new Entry(path, Metadata.FromNativePayload(metadataPayload)));
-        }
-
-        return results;
-    }
-}
-
-[StructLayout(LayoutKind.Sequential)]
-/// <summary>
-/// Native list payload that points to an array of entry pointers.
-/// </summary>
-internal struct OpenDALEntryList
-{
-    public IntPtr Entries;
-
-    public nuint Len;
 }

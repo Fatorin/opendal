@@ -23,11 +23,26 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service upyun.
+    /// </summary>
     public sealed class UpyunServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// bucket address of this backend.
+        /// </summary>
         public string? Bucket { get; init; }
+        /// <summary>
+        /// username of this backend.
+        /// </summary>
         public string? Operator { get; init; }
+        /// <summary>
+        /// password of this backend.
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "upyun";

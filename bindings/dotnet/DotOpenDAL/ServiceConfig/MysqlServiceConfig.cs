@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service mysql.
+    /// </summary>
     public sealed class MysqlServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// This connection string is used to connect to the mysql service. There are url based formats. The format of connect string resembles the url format of the mysql client. The format is: [scheme://][user[:[password]]@]host[:port][/schema][?attribute1=value1&attribute2=value2... mysql://user@localhost mysql://user:password@localhost mysql://user:password@localhost:3306 mysql://user:password@localhost:3306/db For more information, please refer to https://docs.rs/sqlx/latest/sqlx/mysql/struct.MySqlConnectOptions.html .
+        /// </summary>
         public string? ConnectionString { get; init; }
+        /// <summary>
+        /// The key field name for mysql.
+        /// </summary>
         public string? KeyField { get; init; }
+        /// <summary>
+        /// The root for mysql.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// The table name for mysql.
+        /// </summary>
         public string? Table { get; init; }
+        /// <summary>
+        /// The value field name for mysql.
+        /// </summary>
         public string? ValueField { get; init; }
 
         public string Scheme => "mysql";

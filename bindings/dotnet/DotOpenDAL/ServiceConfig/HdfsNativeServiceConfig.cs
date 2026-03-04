@@ -23,10 +23,22 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service hdfs_native.
+    /// </summary>
     public sealed class HdfsNativeServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// enable the append capacity
+        /// </summary>
         public bool? EnableAppend { get; init; }
+        /// <summary>
+        /// name_node of this backend
+        /// </summary>
         public string? NameNode { get; init; }
+        /// <summary>
+        /// work dir of this backend
+        /// </summary>
         public string? Root { get; init; }
 
         public string Scheme => "hdfs_native";

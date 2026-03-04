@@ -23,12 +23,30 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service seafile.
+    /// </summary>
     public sealed class SeafileServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// endpoint address of this backend.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// password of this backend.
+        /// </summary>
         public string? Password { get; init; }
+        /// <summary>
+        /// repo_name of this backend. required.
+        /// </summary>
         public string? RepoName { get; init; }
+        /// <summary>
+        /// root of this backend. All operations will happen under this root.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// username of this backend.
+        /// </summary>
         public string? Username { get; init; }
 
         public string Scheme => "seafile";

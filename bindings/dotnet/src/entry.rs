@@ -21,18 +21,28 @@ use crate::metadata::{metadata_free, OpendalMetadata};
 use crate::utils::into_string_ptr;
 
 #[repr(C)]
+/// FFI representation of an OpenDAL entry.
+///
+/// String and metadata fields are heap-allocated and owned by Rust until
+/// released via `entry_list_free`.
 pub struct OpendalEntry {
+    /// Full entry path as a UTF-8 C string.
     pub path: *mut c_char,
+    /// Metadata payload for this entry.
     pub metadata: *mut OpendalMetadata,
 }
 
 #[repr(C)]
+/// FFI representation of a list of entries.
 pub struct OpendalEntryList {
+    /// Pointer to an array of `OpendalEntry*`.
     pub entries: *mut *mut OpendalEntry,
+    /// Number of entries in `entries`.
     pub len: usize,
 }
 
 impl OpendalEntry {
+    /// Convert a native OpenDAL entry into the FFI entry representation.
     pub fn from_entry(entry: opendal::Entry) -> Self {
         let path = into_string_ptr(entry.path().to_string());
         let metadata = Box::into_raw(Box::new(OpendalMetadata::from_metadata(
@@ -43,6 +53,9 @@ impl OpendalEntry {
     }
 }
 
+/// Convert OpenDAL entries into an owned FFI list pointer.
+///
+/// The returned pointer must be released by `entry_list_free`.
 pub fn into_entry_list_ptr(entries: Vec<opendal::Entry>) -> *mut c_void {
     let mut entry_ptrs: Vec<*mut OpendalEntry> = entries
         .into_iter()
@@ -59,6 +72,12 @@ pub fn into_entry_list_ptr(entries: Vec<opendal::Entry>) -> *mut c_void {
     })) as *mut c_void
 }
 
+/// Release one FFI entry payload.
+///
+/// # Safety
+///
+/// - `entry` must be null or a pointer previously produced by this crate.
+/// - This function must be called at most once per non-null pointer.
 unsafe fn free_entry(entry: *mut OpendalEntry) {
     if entry.is_null() {
         return;

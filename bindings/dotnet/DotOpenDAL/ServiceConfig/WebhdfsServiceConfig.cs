@@ -23,13 +23,34 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service webhdfs.
+    /// </summary>
     public sealed class WebhdfsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// atomic_write_dir of this backend
+        /// </summary>
         public string? AtomicWriteDir { get; init; }
+        /// <summary>
+        /// Delegation token for webhdfs.
+        /// </summary>
         public string? Delegation { get; init; }
+        /// <summary>
+        /// Disable batch listing
+        /// </summary>
         public bool? DisableListBatch { get; init; }
+        /// <summary>
+        /// Endpoint for webhdfs.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// Root for webhdfs.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// Name of the user for webhdfs.
+        /// </summary>
         public string? UserName { get; init; }
 
         public string Scheme => "webhdfs";

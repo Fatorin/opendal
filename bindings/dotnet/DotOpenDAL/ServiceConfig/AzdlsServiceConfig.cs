@@ -23,17 +23,50 @@ using DotOpenDAL.ServiceConfig.Abstractions;
 
 namespace DotOpenDAL.ServiceConfig
 {
+    /// <summary>
+    /// Configuration for service azdls.
+    /// </summary>
     public sealed class AzdlsServiceConfig : IServiceConfig
     {
+        /// <summary>
+        /// Account key of this backend. required for shared_key authentication
+        /// </summary>
         public string? AccountKey { get; init; }
+        /// <summary>
+        /// Account name of this backend.
+        /// </summary>
         public string? AccountName { get; init; }
+        /// <summary>
+        /// authority_host The authority host of the service principal. required for client_credentials authentication default value: https://login.microsoftonline.com
+        /// </summary>
         public string? AuthorityHost { get; init; }
+        /// <summary>
+        /// client_id The client id of the service principal. required for client_credentials authentication
+        /// </summary>
         public string? ClientId { get; init; }
+        /// <summary>
+        /// client_secret The client secret of the service principal. required for client_credentials authentication
+        /// </summary>
         public string? ClientSecret { get; init; }
+        /// <summary>
+        /// Endpoint of this backend.
+        /// </summary>
         public string? Endpoint { get; init; }
+        /// <summary>
+        /// Filesystem name of this backend.
+        /// </summary>
         public string? Filesystem { get; init; }
+        /// <summary>
+        /// Root of this backend.
+        /// </summary>
         public string? Root { get; init; }
+        /// <summary>
+        /// sas_token The shared access signature token. required for sas authentication
+        /// </summary>
         public string? SasToken { get; init; }
+        /// <summary>
+        /// tenant_id The tenant id of the service principal. required for client_credentials authentication
+        /// </summary>
         public string? TenantId { get; init; }
 
         public string Scheme => "azdls";
