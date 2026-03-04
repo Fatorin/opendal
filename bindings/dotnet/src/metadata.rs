@@ -49,7 +49,7 @@ impl OpendalMetadata {
                 (
                     1,
                     last_modified.into_inner().as_second(),
-                    last_modified.into_inner().subsec_nanosecond() as i32,
+                    last_modified.into_inner().subsec_nanosecond(),
                 )
             } else {
                 (0, 0, 0)

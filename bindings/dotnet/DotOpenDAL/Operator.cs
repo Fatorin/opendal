@@ -269,16 +269,25 @@ public partial class Operator : SafeHandle
         {
             unsafe
             {
-                return NativeMethods.operator_write_with_options_async(
-                    this,
-                    executorHandle,
-                    path,
-                    content,
-                    (nuint)content.Length,
-                    optionsHandle,
-                    &OnWriteCompleted,
-                    context
-                );
+                fixed (byte* ptr = content)
+                {
+                    var buffer = new ByteBuffer
+                    {
+                        Data = (IntPtr)ptr,
+                        Len = (nuint)content.Length,
+                        Capacity = (nuint)content.Length,
+                    };
+
+                    return NativeMethods.operator_write_with_options_async(
+                        this,
+                        executorHandle,
+                        path,
+                        buffer,
+                        optionsHandle,
+                        &OnWriteCompleted,
+                        context
+                    );
+                }
             }
         }
     }

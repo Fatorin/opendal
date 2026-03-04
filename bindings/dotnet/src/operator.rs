@@ -1444,22 +1444,20 @@ fn operator_write_with_options_inner(
 ///
 /// - `op` must be a valid operator pointer from `operator_construct`.
 /// - `path` must be a valid null-terminated UTF-8 string.
-/// - When `len > 0`, `data` must be non-null and readable for `len` bytes.
-/// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
+/// - `data.data` must be non-null and readable for `data.len` bytes when `data.len > 0`.
 /// - `callback` must be a valid function pointer and remain callable until invoked.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_write_with_options_async(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
-    data: *const u8,
-    len: usize,
+    data: ByteBuffer,
     options: *const opendal::options::WriteOptions,
     callback: Option<WriteCallback>,
     context: i64,
 ) -> OpendalResult {
     match operator_write_with_options_async_inner(
-        op, executor, path, data, len, options, callback, context,
+        op, executor, path, data, options, callback, context,
     ) {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
@@ -1470,8 +1468,7 @@ fn operator_write_with_options_async_inner(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
-    data: *const u8,
-    len: usize,
+    data: ByteBuffer,
     options: *const opendal::options::WriteOptions,
     callback: Option<WriteCallback>,
     context: i64,
@@ -1479,7 +1476,7 @@ fn operator_write_with_options_async_inner(
     let op = require_operator(op)?;
     let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?.to_string();
-    require_data_ptr(data, len)?;
+    require_data_ptr(data.data.cast_const(), data.len)?;
     let callback = require_callback(callback)?;
     let options = if options.is_null() {
         opendal::options::WriteOptions::default()
@@ -1487,10 +1484,10 @@ fn operator_write_with_options_async_inner(
         unsafe { (&*options).clone() }
     };
 
-    let payload = if len == 0 {
+    let payload = if data.len == 0 {
         Vec::new()
     } else {
-        unsafe { std::slice::from_raw_parts(data, len) }.to_vec()
+        unsafe { std::slice::from_raw_parts(data.data.cast_const(), data.len) }.to_vec()
     };
 
     let op = op.clone();

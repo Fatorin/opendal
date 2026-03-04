@@ -185,8 +185,7 @@ internal partial class NativeMethods
         Operator op,
         IntPtr executor,
         string path,
-        [In] byte[] data,
-        nuint len,
+        ByteBuffer data,
         IntPtr options,
         delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
         long context
