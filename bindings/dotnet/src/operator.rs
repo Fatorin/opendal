@@ -441,6 +441,463 @@ fn operator_layer_timeout_inner(
     Ok(Box::into_raw(Box::new(op.clone().layer(timeout))) as *mut c_void)
 }
 
+/// Duplicate an operator instance.
+///
+/// Returned pointer must be released with `operator_free`.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_duplicate(op: *const opendal::Operator) -> OpendalOperatorResult {
+    match operator_duplicate_inner(op) {
+        Ok(value) => OpendalOperatorResult::ok(value),
+        Err(error) => OpendalOperatorResult::from_error(error),
+    }
+}
+
+fn operator_duplicate_inner(op: *const opendal::Operator) -> Result<*mut c_void, OpenDALError> {
+    let op = require_operator(op)?;
+    Ok(Box::into_raw(Box::new(op.clone())) as *mut c_void)
+}
+
+/// Delete `path` synchronously.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_delete(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> OpendalResult {
+    match operator_delete_inner(op, executor, path) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_delete_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?;
+
+    executor
+        .block_on(op.delete(path))
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Delete `path` asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_delete_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_delete_async_inner(op, executor, path, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_delete_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op.delete(&path).await.map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Create directory at `path` synchronously.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_create_dir(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> OpendalResult {
+    match operator_create_dir_inner(op, executor, path) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_create_dir_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?;
+
+    executor
+        .block_on(op.create_dir(path))
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Create directory at `path` asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_create_dir_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_create_dir_async_inner(op, executor, path, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_create_dir_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .create_dir(&path)
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Copy from `source_path` to `target_path` synchronously.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_copy(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+) -> OpendalResult {
+    match operator_copy_inner(op, executor, source_path, target_path) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_copy_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let source_path = require_cstr(source_path, "source_path")?;
+    let target_path = require_cstr(target_path, "target_path")?;
+
+    executor
+        .block_on(op.copy(source_path, target_path))
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Copy from `source_path` to `target_path` asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_copy_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_copy_async_inner(op, executor, source_path, target_path, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_copy_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let source_path = require_cstr(source_path, "source_path")?.to_string();
+    let target_path = require_cstr(target_path, "target_path")?.to_string();
+    let callback = require_callback(callback)?;
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .copy(&source_path, &target_path)
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Rename from `source_path` to `target_path` synchronously.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_rename(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+) -> OpendalResult {
+    match operator_rename_inner(op, executor, source_path, target_path) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_rename_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let source_path = require_cstr(source_path, "source_path")?;
+    let target_path = require_cstr(target_path, "target_path")?;
+
+    executor
+        .block_on(op.rename(source_path, target_path))
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Rename from `source_path` to `target_path` asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_rename_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_rename_async_inner(op, executor, source_path, target_path, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_rename_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    source_path: *const c_char,
+    target_path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let source_path = require_cstr(source_path, "source_path")?.to_string();
+    let target_path = require_cstr(target_path, "target_path")?.to_string();
+    let callback = require_callback(callback)?;
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .rename(&source_path, &target_path)
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Remove `path` recursively synchronously.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_remove_all(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> OpendalResult {
+    match operator_remove_all_inner(op, executor, path) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_remove_all_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?;
+
+    let options = opendal::options::DeleteOptions {
+        recursive: true,
+        ..Default::default()
+    };
+
+    executor
+        .block_on(op.delete_options(path, options))
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Remove `path` recursively asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_remove_all_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_remove_all_async_inner(op, executor, path, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_remove_all_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<WriteCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+    let options = opendal::options::DeleteOptions {
+        recursive: true,
+        ..Default::default()
+    };
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .delete_options(&path, options)
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
 /// Write bytes to `path` synchronously with options.
 /// # Safety
 ///

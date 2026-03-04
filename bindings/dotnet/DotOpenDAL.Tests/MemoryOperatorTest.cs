@@ -484,4 +484,116 @@ public class MemoryOperatorTest
         Assert.Contains(entries, entry => entry.Path == "list-options-async/alpha.txt");
         Assert.Contains(entries, entry => entry.Path == "list-options-async/nested/beta.txt");
     }
+
+    [Fact]
+    public void Duplicate_ReturnsIndependentOperatorHandle()
+    {
+        using var op = new Operator("memory");
+        using var duplicated = op.Duplicate();
+
+        duplicated.Write("duplicate-sync", System.Text.Encoding.UTF8.GetBytes("ok"));
+        var result = op.Read("duplicate-sync");
+
+        Assert.Equal("ok", System.Text.Encoding.UTF8.GetString(result));
+    }
+
+    [Fact]
+    public void CreateDirDeleteCopyRenameRemoveAll_Sync_WorksAsExpected()
+    {
+        using var op = new Operator("memory");
+
+        op.CreateDir("sync-dir/");
+        var dirMeta = op.Stat("sync-dir/");
+        Assert.True(dirMeta.IsDir);
+
+        op.Write("sync-dir/source.txt", System.Text.Encoding.UTF8.GetBytes("payload"));
+
+        if (op.Info.FullCapability.Copy)
+        {
+            op.Copy("sync-dir/source.txt", "sync-dir/copied.txt");
+            var copied = op.Read("sync-dir/copied.txt");
+            Assert.Equal("payload", System.Text.Encoding.UTF8.GetString(copied));
+        }
+
+        if (op.Info.FullCapability.Rename)
+        {
+            var renameSource = op.Info.FullCapability.Copy ? "sync-dir/copied.txt" : "sync-dir/source.txt";
+            op.Rename(renameSource, "sync-dir/renamed.txt");
+            Assert.Throws<OpenDALException>(() => op.Read(renameSource));
+            var renamed = op.Read("sync-dir/renamed.txt");
+            Assert.Equal("payload", System.Text.Encoding.UTF8.GetString(renamed));
+            op.Delete("sync-dir/renamed.txt");
+            Assert.Throws<OpenDALException>(() => op.Read("sync-dir/renamed.txt"));
+        }
+        else
+        {
+            op.Delete("sync-dir/source.txt");
+            Assert.Throws<OpenDALException>(() => op.Read("sync-dir/source.txt"));
+        }
+
+        op.RemoveAll("sync-dir/");
+        var entries = op.List("sync-dir/", new ListOptions { Recursive = true });
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public async Task CreateDirDeleteCopyRenameRemoveAll_Async_WorksAsExpected()
+    {
+        using var op = new Operator("memory");
+
+        await op.CreateDirAsync("async-dir/");
+        var dirMeta = await op.StatAsync("async-dir/");
+        Assert.True(dirMeta.IsDir);
+
+        await op.WriteAsync("async-dir/source.txt", System.Text.Encoding.UTF8.GetBytes("payload"));
+
+        if (op.Info.FullCapability.Copy)
+        {
+            await op.CopyAsync("async-dir/source.txt", "async-dir/copied.txt");
+            var copied = await op.ReadAsync("async-dir/copied.txt");
+            Assert.Equal("payload", System.Text.Encoding.UTF8.GetString(copied));
+        }
+
+        if (op.Info.FullCapability.Rename)
+        {
+            var renameSource = op.Info.FullCapability.Copy ? "async-dir/copied.txt" : "async-dir/source.txt";
+            await op.RenameAsync(renameSource, "async-dir/renamed.txt");
+            await Assert.ThrowsAsync<OpenDALException>(async () => await op.ReadAsync(renameSource));
+            var renamed = await op.ReadAsync("async-dir/renamed.txt");
+            Assert.Equal("payload", System.Text.Encoding.UTF8.GetString(renamed));
+            await op.DeleteAsync("async-dir/renamed.txt");
+            await Assert.ThrowsAsync<OpenDALException>(async () => await op.ReadAsync("async-dir/renamed.txt"));
+        }
+        else
+        {
+            await op.DeleteAsync("async-dir/source.txt");
+            await Assert.ThrowsAsync<OpenDALException>(async () => await op.ReadAsync("async-dir/source.txt"));
+        }
+
+        await op.RemoveAllAsync("async-dir/");
+        var entries = await op.ListAsync("async-dir/", new ListOptions { Recursive = true });
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public void Delete_PathNotExists_IsIdempotent()
+    {
+        using var op = new Operator("memory");
+
+        op.Delete("not-exists-delete-sync");
+        op.Write("delete-idempotent-sync", System.Text.Encoding.UTF8.GetBytes("ok"));
+        var result = op.Read("delete-idempotent-sync");
+        Assert.Equal("ok", System.Text.Encoding.UTF8.GetString(result));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_PathNotExists_IsIdempotent()
+    {
+        using var op = new Operator("memory");
+
+        await op.DeleteAsync("not-exists-delete-async");
+        await op.WriteAsync("delete-idempotent-async", System.Text.Encoding.UTF8.GetBytes("ok"));
+        var result = await op.ReadAsync("delete-idempotent-async");
+        Assert.Equal("ok", System.Text.Encoding.UTF8.GetString(result));
+    }
 }

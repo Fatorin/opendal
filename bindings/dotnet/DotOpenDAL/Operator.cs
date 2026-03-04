@@ -575,6 +575,354 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
+    /// Duplicates this operator and returns a new managed instance.
+    /// </summary>
+    /// <returns>A new operator handle that shares the same backend configuration.</returns>
+    /// <exception cref="ObjectDisposedException">The operator has been disposed.</exception>
+    /// <exception cref="OpenDALException">Native operator duplication fails.</exception>
+    public Operator Duplicate()
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+
+        var result = NativeMethods.operator_duplicate(this);
+        var newHandle = ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result);
+        if (newHandle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Duplicate returned null operator pointer");
+        }
+
+        return new Operator(newHandle);
+    }
+
+    /// <summary>
+    /// Deletes the file at the specified path.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    public void Delete(string path)
+    {
+        Delete(path, executor: null);
+    }
+
+    /// <summary>
+    /// Deletes the file at the specified path using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    public void Delete(string path, Executor? executor)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var result = NativeMethods.operator_delete(this, executorHandle, path);
+        ThrowIfErrorAndRelease(result);
+    }
+
+    /// <summary>
+    /// Deletes the file at the specified path asynchronously.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
+    {
+        return DeleteAsync(path, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes the file at the specified path asynchronously using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task DeleteAsync(string path, Executor? executor, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        return SubmitAsyncOperation(SubmitDeleteAsync, cancellationToken);
+
+        OpenDALResult SubmitDeleteAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_delete_async(
+                    this,
+                    executorHandle,
+                    path,
+                    &OnDeleteCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a directory at the specified path.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    public void CreateDir(string path)
+    {
+        CreateDir(path, executor: null);
+    }
+
+    /// <summary>
+    /// Creates a directory at the specified path using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    public void CreateDir(string path, Executor? executor)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var result = NativeMethods.operator_create_dir(this, executorHandle, path);
+        ThrowIfErrorAndRelease(result);
+    }
+
+    /// <summary>
+    /// Creates a directory at the specified path asynchronously.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task CreateDirAsync(string path, CancellationToken cancellationToken = default)
+    {
+        return CreateDirAsync(path, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a directory at the specified path asynchronously using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task CreateDirAsync(string path, Executor? executor, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        return SubmitAsyncOperation(SubmitCreateDirAsync, cancellationToken);
+
+        OpenDALResult SubmitCreateDirAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_create_dir_async(
+                    this,
+                    executorHandle,
+                    path,
+                    &OnCreateDirCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Copies a file from source path to target path.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    public void Copy(string sourcePath, string targetPath)
+    {
+        Copy(sourcePath, targetPath, executor: null);
+    }
+
+    /// <summary>
+    /// Copies a file from source path to target path using the provided executor.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    public void Copy(string sourcePath, string targetPath, Executor? executor)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var result = NativeMethods.operator_copy(this, executorHandle, sourcePath, targetPath);
+        ThrowIfErrorAndRelease(result);
+    }
+
+    /// <summary>
+    /// Copies a file from source path to target path asynchronously.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task CopyAsync(string sourcePath, string targetPath, CancellationToken cancellationToken = default)
+    {
+        return CopyAsync(sourcePath, targetPath, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Copies a file from source path to target path asynchronously using the provided executor.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task CopyAsync(
+        string sourcePath,
+        string targetPath,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        return SubmitAsyncOperation(SubmitCopyAsync, cancellationToken);
+
+        OpenDALResult SubmitCopyAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_copy_async(
+                    this,
+                    executorHandle,
+                    sourcePath,
+                    targetPath,
+                    &OnCopyCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Renames a file from source path to target path.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    public void Rename(string sourcePath, string targetPath)
+    {
+        Rename(sourcePath, targetPath, executor: null);
+    }
+
+    /// <summary>
+    /// Renames a file from source path to target path using the provided executor.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    public void Rename(string sourcePath, string targetPath, Executor? executor)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var result = NativeMethods.operator_rename(this, executorHandle, sourcePath, targetPath);
+        ThrowIfErrorAndRelease(result);
+    }
+
+    /// <summary>
+    /// Renames a file from source path to target path asynchronously.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task RenameAsync(string sourcePath, string targetPath, CancellationToken cancellationToken = default)
+    {
+        return RenameAsync(sourcePath, targetPath, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renames a file from source path to target path asynchronously using the provided executor.
+    /// </summary>
+    /// <param name="sourcePath">Source path in the configured backend.</param>
+    /// <param name="targetPath">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task RenameAsync(
+        string sourcePath,
+        string targetPath,
+        Executor? executor,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        return SubmitAsyncOperation(SubmitRenameAsync, cancellationToken);
+
+        OpenDALResult SubmitRenameAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_rename_async(
+                    this,
+                    executorHandle,
+                    sourcePath,
+                    targetPath,
+                    &OnRenameCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes all entries under the specified path recursively.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    public void RemoveAll(string path)
+    {
+        RemoveAll(path, executor: null);
+    }
+
+    /// <summary>
+    /// Removes all entries under the specified path recursively using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    public void RemoveAll(string path, Executor? executor)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+        var result = NativeMethods.operator_remove_all(this, executorHandle, path);
+        ThrowIfErrorAndRelease(result);
+    }
+
+    /// <summary>
+    /// Removes all entries under the specified path recursively asynchronously.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task RemoveAllAsync(string path, CancellationToken cancellationToken = default)
+    {
+        return RemoveAllAsync(path, executor: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes all entries under the specified path recursively asynchronously using the provided executor.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when the native callback reports completion.</returns>
+    public Task RemoveAllAsync(string path, Executor? executor, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        return SubmitAsyncOperation(SubmitRemoveAllAsync, cancellationToken);
+
+        OpenDALResult SubmitRemoveAllAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_remove_all_async(
+                    this,
+                    executorHandle,
+                    path,
+                    &OnRemoveAllCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
     /// Releases the native operator handle.
     /// </summary>
     /// <returns><see langword="true"/> after the handle has been released.</returns>
@@ -754,6 +1102,34 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
+    /// Submits a native async operation without options and binds it to a managed task completion source.
+    /// </summary>
+    /// <param name="submit">Submission delegate that invokes the native async API.</param>
+    /// <param name="cancellationToken">Cancellation token for managed task observation.</param>
+    /// <returns>A task completed by the corresponding native callback.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
+    /// <exception cref="OpenDALException">Native submission returns an immediate error.</exception>
+    internal static Task SubmitAsyncOperation(
+        Func<long, OpenDALResult> submit,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = AsyncStateRegistry.Register<bool>(out var asyncState);
+        try
+        {
+            var submitResult = submit(context);
+            ThrowIfErrorAndRelease(submitResult);
+            asyncState.BindCancellation(cancellationToken);
+            return asyncState.Completion.Task;
+        }
+        catch
+        {
+            AsyncStateRegistry.Unregister(context);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Attempts to retrieve and remove async state for a callback context.
     /// </summary>
     /// <typeparam name="T">Async state result type.</typeparam>
@@ -921,6 +1297,61 @@ public partial class Operator : SafeHandle
     private static void OnListCompleted(long context, OpenDALEntryListResult result)
     {
         CompleteAsyncCallback<IReadOnlyList<Entry>, OpenDALEntryListResult>(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous delete operation finishes.
+    /// </summary>
+    /// <param name="context">Opaque async state context previously registered by <see cref="AsyncStateRegistry"/>.</param>
+    /// <param name="result">Delete completion result returned by the native layer.</param>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnDeleteCompleted(long context, OpenDALResult result)
+    {
+        CompleteAsyncCallback(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous create-dir operation finishes.
+    /// </summary>
+    /// <param name="context">Opaque async state context previously registered by <see cref="AsyncStateRegistry"/>.</param>
+    /// <param name="result">Create-dir completion result returned by the native layer.</param>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnCreateDirCompleted(long context, OpenDALResult result)
+    {
+        CompleteAsyncCallback(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous copy operation finishes.
+    /// </summary>
+    /// <param name="context">Opaque async state context previously registered by <see cref="AsyncStateRegistry"/>.</param>
+    /// <param name="result">Copy completion result returned by the native layer.</param>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnCopyCompleted(long context, OpenDALResult result)
+    {
+        CompleteAsyncCallback(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous rename operation finishes.
+    /// </summary>
+    /// <param name="context">Opaque async state context previously registered by <see cref="AsyncStateRegistry"/>.</param>
+    /// <param name="result">Rename completion result returned by the native layer.</param>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnRenameCompleted(long context, OpenDALResult result)
+    {
+        CompleteAsyncCallback(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous remove-all operation finishes.
+    /// </summary>
+    /// <param name="context">Opaque async state context previously registered by <see cref="AsyncStateRegistry"/>.</param>
+    /// <param name="result">Remove-all completion result returned by the native layer.</param>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnRemoveAllCompleted(long context, OpenDALResult result)
+    {
+        CompleteAsyncCallback(context, result);
     }
 
     #endregion

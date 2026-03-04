@@ -60,6 +60,10 @@ internal partial class NativeMethods
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial void operator_info_free(IntPtr info);
 
+    [LibraryImport(__DllName, EntryPoint = "operator_duplicate")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALOperatorResult operator_duplicate(Operator op);
+
     #endregion
 
     #region Option Builders
@@ -257,6 +261,120 @@ internal partial class NativeMethods
         string path,
         IntPtr options,
         delegate* unmanaged[Cdecl]<long, OpenDALEntryListResult, void> callback,
+        long context
+    );
+
+    #endregion
+
+    #region Delete
+
+    [LibraryImport(__DllName, EntryPoint = "operator_delete", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_delete(
+        Operator op,
+        IntPtr executor,
+        string path
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_delete_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_delete_async(
+        Operator op,
+        IntPtr executor,
+        string path,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        long context
+    );
+
+    #endregion
+
+    #region CreateDir
+
+    [LibraryImport(__DllName, EntryPoint = "operator_create_dir", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_create_dir(
+        Operator op,
+        IntPtr executor,
+        string path
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_create_dir_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_create_dir_async(
+        Operator op,
+        IntPtr executor,
+        string path,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        long context
+    );
+
+    #endregion
+
+    #region Copy
+
+    [LibraryImport(__DllName, EntryPoint = "operator_copy", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_copy(
+        Operator op,
+        IntPtr executor,
+        string sourcePath,
+        string targetPath
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_copy_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_copy_async(
+        Operator op,
+        IntPtr executor,
+        string sourcePath,
+        string targetPath,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        long context
+    );
+
+    #endregion
+
+    #region Rename
+
+    [LibraryImport(__DllName, EntryPoint = "operator_rename", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_rename(
+        Operator op,
+        IntPtr executor,
+        string sourcePath,
+        string targetPath
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_rename_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_rename_async(
+        Operator op,
+        IntPtr executor,
+        string sourcePath,
+        string targetPath,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        long context
+    );
+
+    #endregion
+
+    #region RemoveAll
+
+    [LibraryImport(__DllName, EntryPoint = "operator_remove_all", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_remove_all(
+        Operator op,
+        IntPtr executor,
+        string path
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_remove_all_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_remove_all_async(
+        Operator op,
+        IntPtr executor,
+        string path,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
         long context
     );
 
