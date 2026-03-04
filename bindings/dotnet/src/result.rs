@@ -17,12 +17,11 @@
 
 use std::ffi::c_void;
 
-use crate::byte_buffer::ByteBuffer;
-use crate::error::OpenDALError;
+use crate::byte_buffer::{ByteBuffer, buffer_free};
 use crate::entry::entry_list_free;
+use crate::error::OpenDALError;
 use crate::metadata::metadata_free;
 use crate::operator::operator_info_free;
-use crate::utils::buffer_free;
 
 #[repr(C)]
 /// Result for operations that only report success or failure.
@@ -248,7 +247,11 @@ pub extern "C" fn opendal_entry_list_result_release(mut result: OpendalEntryList
 pub extern "C" fn opendal_read_result_release(mut result: OpendalReadResult) {
     if !result.buffer.data.is_null() {
         unsafe {
-            buffer_free(result.buffer.data, result.buffer.len, result.buffer.capacity);
+            buffer_free(
+                result.buffer.data,
+                result.buffer.len,
+                result.buffer.capacity,
+            );
         }
     }
 

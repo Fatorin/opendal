@@ -60,3 +60,36 @@ impl ByteBuffer {
         }
     }
 }
+
+/// # Safety
+///
+/// - `data`, `len`, and `capacity` must come from `ByteBuffer::from_vec`.
+/// - This function must be called at most once for the same allocation.
+/// - Callers must not access `data` after this function returns.
+pub unsafe fn buffer_free(data: *mut u8, len: usize, capacity: usize) {
+    if data.is_null() {
+        debug_assert_eq!(len, 0, "len must be zero when data is null");
+        debug_assert_eq!(capacity, 0, "capacity must be zero when data is null");
+        return;
+    }
+
+    if capacity == 0 {
+        debug_assert!(
+            capacity > 0,
+            "capacity must be greater than zero when data is not null"
+        );
+        return;
+    }
+
+    if capacity < len {
+        debug_assert!(
+            capacity >= len,
+            "capacity must be greater than or equal to len"
+        );
+        return;
+    }
+
+    unsafe {
+        drop(Vec::from_raw_parts(data, len, capacity));
+    }
+}

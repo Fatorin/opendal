@@ -18,21 +18,16 @@
 use crate::{
     byte_buffer::ByteBuffer,
     entry::into_entry_list_ptr,
-    executor::executor_or_default,
     error::OpenDALError,
+    executor::executor_or_default,
     metadata::OpendalMetadata,
-    options::{
-        parse_list_options, parse_read_options, parse_stat_options, parse_write_options,
-    },
-    operator_info::OpendalOperatorInfo,
+    operator_info::{OpendalOperatorInfo, into_operator_info},
+    options::{parse_list_options, parse_read_options, parse_stat_options, parse_write_options},
     result::{
-        OpendalEntryListResult, OpendalMetadataResult, OpendalReadResult,
-        OpendalOperatorInfoResult, OpendalOperatorResult, OpendalOptionsResult, OpendalResult,
+        OpendalEntryListResult, OpendalMetadataResult, OpendalOperatorInfoResult,
+        OpendalOperatorResult, OpendalOptionsResult, OpendalReadResult, OpendalResult,
     },
-    utils::{
-        collect_options, into_operator_info, require_callback, require_cstr, require_data_ptr,
-        require_operator,
-    },
+    utils::{collect_options, require_callback, require_cstr, require_data_ptr, require_operator},
     validators::prelude::{
         validate_concurrent_limit_options, validate_retry_options, validate_timeout_options,
     },
@@ -68,9 +63,7 @@ pub unsafe extern "C" fn constructor_option_build(
     len: usize,
 ) -> OpendalOptionsResult {
     match unsafe { collect_options(keys, values, len) } {
-        Ok(options) => {
-            OpendalOptionsResult::ok(Box::into_raw(Box::new(options)) as *mut c_void)
-        }
+        Ok(options) => OpendalOptionsResult::ok(Box::into_raw(Box::new(options)) as *mut c_void),
         Err(error) => OpendalOptionsResult::from_error(error),
     }
 }
@@ -302,9 +295,7 @@ pub unsafe extern "C" fn operator_info_get(
     }
 }
 
-fn operator_info_get_inner(
-    op: *const opendal::Operator,
-) -> Result<*mut c_void, OpenDALError> {
+fn operator_info_get_inner(op: *const opendal::Operator) -> Result<*mut c_void, OpenDALError> {
     let op = require_operator(op)?;
     let info = into_operator_info(op.info());
     Ok(Box::into_raw(Box::new(info)) as *mut c_void)
@@ -351,7 +342,14 @@ pub unsafe extern "C" fn operator_layer_retry(
     max_delay_nanos: u64,
     max_times: usize,
 ) -> OpendalOperatorResult {
-    match operator_layer_retry_inner(op, jitter, factor, min_delay_nanos, max_delay_nanos, max_times) {
+    match operator_layer_retry_inner(
+        op,
+        jitter,
+        factor,
+        min_delay_nanos,
+        max_delay_nanos,
+        max_times,
+    ) {
         Ok(value) => OpendalOperatorResult::ok(value),
         Err(error) => OpendalOperatorResult::from_error(error),
     }
@@ -516,7 +514,9 @@ pub unsafe extern "C" fn operator_write_with_options_async(
     callback: Option<WriteCallback>,
     context: i64,
 ) -> OpendalResult {
-    match operator_write_with_options_async_inner(op, executor, path, data, len, options, callback, context) {
+    match operator_write_with_options_async_inner(
+        op, executor, path, data, len, options, callback, context,
+    ) {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
@@ -719,7 +719,9 @@ fn operator_stat_with_options_inner(
     let metadata = executor
         .block_on(op.stat_options(path, options))
         .map_err(OpenDALError::from_opendal_error)?;
-    Ok(Box::into_raw(Box::new(OpendalMetadata::from_metadata(metadata))))
+    Ok(Box::into_raw(Box::new(OpendalMetadata::from_metadata(
+        metadata,
+    ))))
 }
 
 /// Stat `path` asynchronously with options.

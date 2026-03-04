@@ -40,7 +40,9 @@ pub struct Executor {
 impl Executor {
     fn new(threads: usize) -> Result<Self, OpenDALError> {
         if threads == 0 {
-            return Err(config_invalid_error("executor threads must be greater than 0"));
+            return Err(config_invalid_error(
+                "executor threads must be greater than 0",
+            ));
         }
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -122,9 +124,9 @@ pub extern "C" fn executor_create(threads: usize) -> OpendalExecutorResult {
                     registry.insert(id, Arc::new(executor));
                     OpendalExecutorResult::ok(id as *mut c_void)
                 }
-                Err(_) => {
-                    OpendalExecutorResult::from_error(config_invalid_error("executor registry is poisoned"))
-                }
+                Err(_) => OpendalExecutorResult::from_error(config_invalid_error(
+                    "executor registry is poisoned",
+                )),
             }
         }
         Err(error) => OpendalExecutorResult::from_error(error),

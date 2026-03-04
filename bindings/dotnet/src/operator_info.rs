@@ -17,7 +17,7 @@
 
 use std::os::raw::c_char;
 
-use crate::capability::Capability;
+use crate::{capability::Capability, utils::into_string_ptr};
 
 #[repr(C)]
 /// Operator info payload exposed to the .NET binding.
@@ -27,4 +27,14 @@ pub struct OpendalOperatorInfo {
     pub name: *mut c_char,
     pub full_capability: Capability,
     pub native_capability: Capability,
+}
+
+pub fn into_operator_info(info: opendal::OperatorInfo) -> OpendalOperatorInfo {
+    OpendalOperatorInfo {
+        scheme: into_string_ptr(info.scheme().to_string()),
+        root: into_string_ptr(info.root()),
+        name: into_string_ptr(info.name()),
+        full_capability: Capability::new(info.full_capability()),
+        native_capability: Capability::new(info.native_capability()),
+    }
 }

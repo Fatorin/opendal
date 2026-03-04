@@ -18,6 +18,48 @@
 pub mod layer;
 pub mod options;
 
+use crate::error::OpenDALError;
+use crate::utils::config_invalid_error;
+
+pub(crate) fn validate_non_zero_u64(value: u64, field: &str) -> Result<(), OpenDALError> {
+    if value == 0 {
+        return Err(config_invalid_error(format!(
+            "{field} must be greater than zero"
+        )));
+    }
+
+    Ok(())
+}
+
+pub(crate) fn validate_non_zero_usize(value: usize, field: &str) -> Result<(), OpenDALError> {
+    if value == 0 {
+        return Err(config_invalid_error(format!(
+            "{field} must be greater than zero"
+        )));
+    }
+
+    Ok(())
+}
+
+pub(crate) fn validate_positive_finite_f32(value: f32, field: &str) -> Result<(), OpenDALError> {
+    if !value.is_finite() || value <= 0.0 {
+        return Err(config_invalid_error(format!(
+            "{field} must be a positive finite number"
+        )));
+    }
+
+    Ok(())
+}
+
+pub(crate) fn validate_checked_add_u64(
+    left: u64,
+    right: u64,
+    context: &str,
+) -> Result<u64, OpenDALError> {
+    left.checked_add(right)
+        .ok_or_else(|| config_invalid_error(format!("{context} overflow")))
+}
+
 pub(crate) mod prelude {
     pub(crate) use super::layer::{
         validate_concurrent_limit_options, validate_retry_options, validate_timeout_options,

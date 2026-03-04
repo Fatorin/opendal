@@ -17,6 +17,9 @@
 
 use crate::error::OpenDALError;
 use crate::utils::config_invalid_error;
+use crate::validators::{
+    validate_non_zero_u64, validate_non_zero_usize, validate_positive_finite_f32,
+};
 
 /// Validate retry layer options.
 pub fn validate_retry_options(
@@ -24,11 +27,7 @@ pub fn validate_retry_options(
     min_delay_nanos: u64,
     max_delay_nanos: u64,
 ) -> Result<(), OpenDALError> {
-    if !factor.is_finite() || factor <= 0.0 {
-        return Err(config_invalid_error(
-            "retry factor must be a positive finite number",
-        ));
-    }
+    validate_positive_finite_f32(factor, "retry factor")?;
 
     if max_delay_nanos < min_delay_nanos {
         return Err(config_invalid_error(
@@ -40,23 +39,19 @@ pub fn validate_retry_options(
 }
 
 /// Validate timeout layer options.
-pub fn validate_timeout_options(timeout_nanos: u64, io_timeout_nanos: u64) -> Result<(), OpenDALError> {
-    if timeout_nanos == 0 {
-        return Err(config_invalid_error("timeout_nanos must be greater than zero"));
-    }
-
-    if io_timeout_nanos == 0 {
-        return Err(config_invalid_error("io_timeout_nanos must be greater than zero"));
-    }
+pub fn validate_timeout_options(
+    timeout_nanos: u64,
+    io_timeout_nanos: u64,
+) -> Result<(), OpenDALError> {
+    validate_non_zero_u64(timeout_nanos, "timeout_nanos")?;
+    validate_non_zero_u64(io_timeout_nanos, "io_timeout_nanos")?;
 
     Ok(())
 }
 
 /// Validate concurrent-limit layer options.
 pub fn validate_concurrent_limit_options(permits: usize) -> Result<(), OpenDALError> {
-    if permits == 0 {
-        return Err(config_invalid_error("permits must be greater than zero"));
-    }
+    validate_non_zero_usize(permits, "permits")?;
 
     Ok(())
 }

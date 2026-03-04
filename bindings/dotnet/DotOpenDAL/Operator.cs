@@ -41,6 +41,16 @@ public partial class Operator : SafeHandle
         info = CreateInfoLazy();
     }
 
+    private Operator(IntPtr nativeHandle) : this()
+    {
+        if (nativeHandle == IntPtr.Zero)
+        {
+            throw new ArgumentException("Native operator handle must not be zero.", nameof(nativeHandle));
+        }
+
+        SetHandle(nativeHandle);
+    }
+
     /// <summary>
     /// Gets metadata of this operator.
     /// </summary>
@@ -104,10 +114,10 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
-    /// Applies the specified layer and returns this operator instance.
+    /// Applies the specified layer and returns a new operator instance.
     /// </summary>
     /// <param name="layer">Layer to apply.</param>
-    /// <returns>This operator with the layer applied.</returns>
+    /// <returns>A new operator with the layer applied.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="layer"/> is null.</exception>
     /// <exception cref="ObjectDisposedException">The operator has been disposed.</exception>
     /// <exception cref="OpenDALException">Native layer application fails.</exception>
@@ -575,10 +585,10 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
-    /// Applies a native layer result by swapping the current operator handle with the returned handle.
+    /// Applies a native layer result by creating a new operator from the returned handle.
     /// </summary>
     /// <param name="result">Native result that contains a new operator pointer.</param>
-    /// <returns>This operator instance with updated native handle.</returns>
+    /// <returns>A new operator instance.</returns>
     /// <exception cref="InvalidOperationException">Returned operator pointer is null.</exception>
     /// <exception cref="OpenDALException">Native layer application fails.</exception>
     internal Operator ApplyLayerResult(OpenDALOperatorResult result)
@@ -589,16 +599,7 @@ public partial class Operator : SafeHandle
             throw new InvalidOperationException("Layer application returned null operator pointer");
         }
 
-        var oldHandle = handle;
-        SetHandle(newHandle);
-        info = CreateInfoLazy();
-
-        if (oldHandle != IntPtr.Zero)
-        {
-            NativeMethods.operator_free(oldHandle);
-        }
-
-        return this;
+        return new Operator(newHandle);
     }
 
     /// <summary>

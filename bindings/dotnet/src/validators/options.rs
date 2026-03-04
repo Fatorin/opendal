@@ -17,85 +17,42 @@
 
 //! Validators for operation option payloads.
 
-use crate::error::{ErrorCode, OpenDALError};
+use crate::error::OpenDALError;
+use crate::validators::{validate_checked_add_u64, validate_non_zero_usize};
 
-pub fn validate_read_range_end(offset: u64, length: Option<u64>) -> Result<Option<u64>, OpenDALError> {
-	let Some(size) = length else {
-		return Ok(None);
-	};
+pub fn validate_read_range_end(
+    offset: u64,
+    length: Option<u64>,
+) -> Result<Option<u64>, OpenDALError> {
+    let Some(size) = length else {
+        return Ok(None);
+    };
 
-	let end = offset.checked_add(size).ok_or_else(|| {
-		OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			"offset + length overflow in read options",
-		)
-	})?;
+    let end = validate_checked_add_u64(offset, size, "offset + length in read options")?;
 
-	Ok(Some(end))
+    Ok(Some(end))
 }
 
 pub fn validate_read_concurrent(concurrent: usize) -> Result<(), OpenDALError> {
-	if concurrent == 0 {
-		return Err(OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			"read concurrent must be > 0",
-		));
-	}
-
-	Ok(())
+    validate_non_zero_usize(concurrent, "read concurrent")
 }
 
 pub fn validate_read_chunk(chunk: usize) -> Result<(), OpenDALError> {
-	if chunk == 0 {
-		return Err(OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			"read chunk must be > 0",
-		));
-	}
-
-	Ok(())
+    validate_non_zero_usize(chunk, "read chunk")
 }
 
 pub fn validate_read_gap(gap: usize) -> Result<(), OpenDALError> {
-	if gap == 0 {
-		return Err(OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			"read gap must be > 0",
-		));
-	}
-
-	Ok(())
+    validate_non_zero_usize(gap, "read gap")
 }
 
 pub fn validate_write_concurrent(concurrent: usize) -> Result<(), OpenDALError> {
-	if concurrent == 0 {
-		return Err(OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			"write concurrent must be > 0",
-		));
-	}
-
-	Ok(())
+    validate_non_zero_usize(concurrent, "write concurrent")
 }
 
 pub fn validate_write_chunk(chunk: usize) -> Result<(), OpenDALError> {
-	if chunk == 0 {
-		return Err(OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			"write chunk must be > 0",
-		));
-	}
-
-	Ok(())
+    validate_non_zero_usize(chunk, "write chunk")
 }
 
 pub fn validate_list_limit(limit: usize) -> Result<(), OpenDALError> {
-	if limit == 0 {
-		return Err(OpenDALError::from_error(
-			ErrorCode::ConfigInvalid,
-			"list limit must be > 0",
-		));
-	}
-
-	Ok(())
+    validate_non_zero_usize(limit, "list limit")
 }

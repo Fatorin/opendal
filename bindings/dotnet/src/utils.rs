@@ -18,9 +18,7 @@
 use std::os::raw::c_char;
 use std::{collections::HashMap, ffi::CStr};
 
-use crate::capability::Capability;
 use crate::error::{ErrorCode, OpenDALError};
-use crate::operator_info::OpendalOperatorInfo;
 
 pub fn cstr_to_str<'a>(value: *const c_char) -> Option<&'a str> {
     if value.is_null() {
@@ -44,8 +42,9 @@ pub fn invalid_utf8_message_at(field: &str, index: usize) -> String {
 }
 
 pub fn require_cstr<'a>(value: *const c_char, field: &str) -> Result<&'a str, OpenDALError> {
-    cstr_to_str(value)
-        .ok_or_else(|| OpenDALError::from_error(ErrorCode::ConfigInvalid, invalid_utf8_message(field)))
+    cstr_to_str(value).ok_or_else(|| {
+        OpenDALError::from_error(ErrorCode::ConfigInvalid, invalid_utf8_message(field))
+    })
 }
 
 pub fn require_operator<'a>(
@@ -101,7 +100,9 @@ pub unsafe fn collect_options(
             return Err(config_invalid_error(invalid_utf8_message_at("key", index)));
         }
         if value_ptr.is_null() {
-            return Err(config_invalid_error(invalid_utf8_message_at("value", index)));
+            return Err(config_invalid_error(invalid_utf8_message_at(
+                "value", index,
+            )));
         }
 
         let key = unsafe { CStr::from_ptr(key_ptr) }
@@ -117,39 +118,6 @@ pub unsafe fn collect_options(
     Ok(map)
 }
 
-/// # Safety
-///
-/// - `data`, `len`, and `capacity` must come from `ByteBuffer::from_vec`.
-/// - This function must be called at most once for the same allocation.
-/// - Callers must not access `data` after this function returns.
-pub unsafe fn buffer_free(data: *mut u8, len: usize, capacity: usize) {
-    if data.is_null() {
-        debug_assert_eq!(len, 0, "len must be zero when data is null");
-        debug_assert_eq!(capacity, 0, "capacity must be zero when data is null");
-        return;
-    }
-
-    if capacity == 0 {
-        debug_assert!(
-            capacity > 0,
-            "capacity must be greater than zero when data is not null"
-        );
-        return;
-    }
-
-    if capacity < len {
-        debug_assert!(
-            capacity >= len,
-            "capacity must be greater than or equal to len"
-        );
-        return;
-    }
-
-    unsafe {
-        drop(Vec::from_raw_parts(data, len, capacity));
-    }
-}
-
 pub fn into_string_ptr(message: impl Into<String>) -> *mut c_char {
     match std::ffi::CString::new(message.into()) {
         Ok(msg) => msg.into_raw(),
@@ -158,14 +126,3 @@ pub fn into_string_ptr(message: impl Into<String>) -> *mut c_char {
             .into_raw(),
     }
 }
-
-pub fn into_operator_info(info: opendal::OperatorInfo) -> OpendalOperatorInfo {
-    OpendalOperatorInfo {
-        scheme: into_string_ptr(info.scheme().to_string()),
-        root: into_string_ptr(info.root()),
-        name: into_string_ptr(info.name()),
-        full_capability: Capability::new(info.full_capability()),
-        native_capability: Capability::new(info.native_capability()),
-    }
-}
-

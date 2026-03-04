@@ -17,7 +17,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use crate::metadata::{metadata_free, OpendalMetadata};
+use crate::metadata::{OpendalMetadata, metadata_free};
 use crate::utils::into_string_ptr;
 
 #[repr(C)]
