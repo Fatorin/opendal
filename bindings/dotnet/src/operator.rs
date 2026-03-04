@@ -42,10 +42,10 @@ use std::time::Duration;
 ///
 /// The callback is provided by the .NET side and must remain valid until
 /// invoked by Rust.
-type WriteCallback = unsafe extern "C" fn(context: i64, result: OpendalResult);
-type ReadCallback = unsafe extern "C" fn(context: i64, result: OpendalReadResult);
-type StatCallback = unsafe extern "C" fn(context: i64, result: OpendalMetadataResult);
-type ListCallback = unsafe extern "C" fn(context: i64, result: OpendalEntryListResult);
+type WriteCallback = extern "C" fn(context: i64, result: OpendalResult);
+type ReadCallback = extern "C" fn(context: i64, result: OpendalReadResult);
+type StatCallback = extern "C" fn(context: i64, result: OpendalMetadataResult);
+type ListCallback = extern "C" fn(context: i64, result: OpendalEntryListResult);
 
 /// Build constructor options from raw C string key/value arrays.
 ///
@@ -74,7 +74,7 @@ pub unsafe extern "C" fn constructor_option_build(
 ///   `constructor_option_build`.
 /// - This function must be called at most once for the same pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn constructor_option_free(options: *mut HashMap<String, String>) {
+pub extern "C" fn constructor_option_free(options: *mut HashMap<String, String>) {
     if options.is_null() {
         return;
     }
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn operator_info_free(info: *mut OpendalOperatorInfo) {
 ///
 /// - `op` must be a valid operator pointer from `operator_construct`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_layer_retry(
+pub extern "C" fn operator_layer_retry(
     op: *const opendal::Operator,
     jitter: bool,
     factor: f32,
@@ -386,7 +386,7 @@ fn operator_layer_retry_inner(
 ///
 /// - `op` must be a valid operator pointer from `operator_construct`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_layer_concurrent_limit(
+pub extern "C" fn operator_layer_concurrent_limit(
     op: *const opendal::Operator,
     permits: usize,
 ) -> OpendalOperatorResult {
@@ -415,7 +415,7 @@ fn operator_layer_concurrent_limit_inner(
 ///
 /// - `op` must be a valid operator pointer from `operator_construct`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_layer_timeout(
+pub extern "C" fn operator_layer_timeout(
     op: *const opendal::Operator,
     timeout_nanos: u64,
     io_timeout_nanos: u64,
@@ -449,7 +449,7 @@ fn operator_layer_timeout_inner(
 /// - When `len > 0`, `data` must be non-null and readable for `len` bytes.
 /// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_write_with_options(
+pub extern "C" fn operator_write_with_options(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
@@ -472,7 +472,7 @@ fn operator_write_with_options_inner(
     options: *const opendal::options::WriteOptions,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?;
     require_data_ptr(data, len)?;
     let options = if options.is_null() {
@@ -533,7 +533,7 @@ fn operator_write_with_options_async_inner(
     context: i64,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?.to_string();
     require_data_ptr(data, len)?;
     let callback = require_callback(callback)?;
@@ -557,15 +557,13 @@ fn operator_write_with_options_async_inner(
             .map(|_| ())
             .map_err(OpenDALError::from_opendal_error);
 
-        unsafe {
-            callback(
-                context,
-                match result {
-                    Ok(()) => OpendalResult::ok(),
-                    Err(error) => OpendalResult::from_error(error),
-                },
-            );
-        }
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
     });
 
     Ok(())
@@ -599,7 +597,7 @@ fn operator_read_with_options_inner(
     options: *const opendal::options::ReadOptions,
 ) -> Result<ByteBuffer, OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?;
     let options = if options.is_null() {
         opendal::options::ReadOptions::default()
@@ -626,7 +624,7 @@ fn operator_read_with_options_inner(
 /// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
 /// - `callback` must be a valid function pointer and remain callable until invoked.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_read_with_options_async(
+pub extern "C" fn operator_read_with_options_async(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
@@ -649,7 +647,7 @@ fn operator_read_with_options_async_inner(
     context: i64,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
     let options = if options.is_null() {
@@ -666,15 +664,13 @@ fn operator_read_with_options_async_inner(
             .map(|v| ByteBuffer::from_vec(v.to_vec()))
             .map_err(OpenDALError::from_opendal_error);
 
-        unsafe {
-            callback(
-                context,
-                match result {
-                    Ok(value) => OpendalReadResult::ok(value),
-                    Err(error) => OpendalReadResult::from_error(error),
-                },
-            );
-        }
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalReadResult::ok(value),
+                Err(error) => OpendalReadResult::from_error(error),
+            },
+        );
     });
 
     Ok(())
@@ -689,7 +685,7 @@ fn operator_read_with_options_async_inner(
 /// - `path` must be a valid null-terminated UTF-8 string.
 /// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_stat_with_options(
+pub extern "C" fn operator_stat_with_options(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
@@ -708,7 +704,7 @@ fn operator_stat_with_options_inner(
     options: *const opendal::options::StatOptions,
 ) -> Result<*mut OpendalMetadata, OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?;
     let options = if options.is_null() {
         opendal::options::StatOptions::default()
@@ -735,7 +731,7 @@ fn operator_stat_with_options_inner(
 /// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
 /// - `callback` must be a valid function pointer and remain callable until invoked.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_stat_with_options_async(
+pub extern "C" fn operator_stat_with_options_async(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
@@ -758,7 +754,7 @@ fn operator_stat_with_options_async_inner(
     context: i64,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
     let options = if options.is_null() {
@@ -776,15 +772,13 @@ fn operator_stat_with_options_async_inner(
             .map(|v| Box::into_raw(Box::new(v)))
             .map_err(OpenDALError::from_opendal_error);
 
-        unsafe {
-            callback(
-                context,
-                match result {
-                    Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
-                    Err(error) => OpendalMetadataResult::from_error(error),
-                },
-            );
-        }
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
+                Err(error) => OpendalMetadataResult::from_error(error),
+            },
+        );
     });
 
     Ok(())
@@ -799,7 +793,7 @@ fn operator_stat_with_options_async_inner(
 /// - `path` must be a valid null-terminated UTF-8 string.
 /// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_list_with_options(
+pub extern "C" fn operator_list_with_options(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
@@ -818,7 +812,7 @@ fn operator_list_with_options_inner(
     options: *const opendal::options::ListOptions,
 ) -> Result<*mut c_void, OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?;
     let options = if options.is_null() {
         opendal::options::ListOptions::default()
@@ -844,7 +838,7 @@ fn operator_list_with_options_inner(
 /// - When `option_len > 0`, `option_keys` and `option_values` must be valid arrays.
 /// - `callback` must be a valid function pointer and remain callable until invoked.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn operator_list_with_options_async(
+pub extern "C" fn operator_list_with_options_async(
     op: *const opendal::Operator,
     executor: *const c_void,
     path: *const c_char,
@@ -867,7 +861,7 @@ fn operator_list_with_options_async_inner(
     context: i64,
 ) -> Result<(), OpenDALError> {
     let op = require_operator(op)?;
-    let executor = unsafe { executor_or_default(executor) }?;
+    let executor = executor_or_default(executor)?;
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
     let options = if options.is_null() {
@@ -884,15 +878,13 @@ fn operator_list_with_options_async_inner(
             .map(into_entry_list_ptr)
             .map_err(OpenDALError::from_opendal_error);
 
-        unsafe {
-            callback(
-                context,
-                match result {
-                    Ok(value) => OpendalEntryListResult::ok(value),
-                    Err(error) => OpendalEntryListResult::from_error(error),
-                },
-            );
-        }
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalEntryListResult::ok(value),
+                Err(error) => OpendalEntryListResult::from_error(error),
+            },
+        );
     });
 
     Ok(())

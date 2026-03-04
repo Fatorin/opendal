@@ -98,7 +98,7 @@ fn default_executor() -> Result<Arc<Executor>, OpenDALError> {
 ///
 /// `executor` must be either null or a valid handle previously returned by
 /// `executor_create`.
-pub unsafe fn executor_or_default(executor: *const c_void) -> Result<Arc<Executor>, OpenDALError> {
+pub fn executor_or_default(executor: *const c_void) -> Result<Arc<Executor>, OpenDALError> {
     if executor.is_null() {
         return default_executor();
     }
