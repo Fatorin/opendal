@@ -25,21 +25,6 @@ use crate::validators::prelude::{
     validate_read_range_end, validate_write_chunk, validate_write_concurrent,
 };
 
-#[derive(Default, Clone)]
-pub struct OpendalConstructorOptions {
-    values: HashMap<String, String>,
-}
-
-impl OpendalConstructorOptions {
-    pub fn from_values(values: HashMap<String, String>) -> Self {
-        Self { values }
-    }
-
-    pub fn into_values(self) -> HashMap<String, String> {
-        self.values
-    }
-}
-
 fn parse_bool(values: &HashMap<String, String>, key: &str) -> Result<Option<bool>, OpenDALError> {
     let Some(raw) = values.get(key) else {
         return Ok(None);

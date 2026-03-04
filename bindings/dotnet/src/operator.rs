@@ -22,8 +22,7 @@ use crate::{
     error::OpenDALError,
     metadata::OpendalMetadata,
     options::{
-        OpendalConstructorOptions, parse_list_options, parse_read_options, parse_stat_options,
-        parse_write_options,
+        parse_list_options, parse_read_options, parse_stat_options, parse_write_options,
     },
     operator_info::OpendalOperatorInfo,
     result::{
@@ -39,6 +38,7 @@ use crate::{
     },
 };
 
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::time::Duration;
@@ -68,8 +68,7 @@ pub unsafe extern "C" fn constructor_option_build(
     len: usize,
 ) -> OpendalOptionsResult {
     match unsafe { collect_options(keys, values, len) } {
-        Ok(values) => {
-            let options = OpendalConstructorOptions::from_values(values);
+        Ok(options) => {
             OpendalOptionsResult::ok(Box::into_raw(Box::new(options)) as *mut c_void)
         }
         Err(error) => OpendalOptionsResult::from_error(error),
@@ -82,7 +81,7 @@ pub unsafe extern "C" fn constructor_option_build(
 ///   `constructor_option_build`.
 /// - This function must be called at most once for the same pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn constructor_option_free(options: *mut OpendalConstructorOptions) {
+pub unsafe extern "C" fn constructor_option_free(options: *mut HashMap<String, String>) {
     if options.is_null() {
         return;
     }
@@ -248,7 +247,7 @@ pub unsafe extern "C" fn list_option_free(options: *mut opendal::options::ListOp
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_construct(
     scheme: *const c_char,
-    options: *const OpendalConstructorOptions,
+    options: *const HashMap<String, String>,
 ) -> OpendalOperatorResult {
     match operator_construct_inner(scheme, options) {
         Ok(op) => OpendalOperatorResult::ok(op),
@@ -258,13 +257,13 @@ pub unsafe extern "C" fn operator_construct(
 
 fn operator_construct_inner(
     scheme: *const c_char,
-    options: *const OpendalConstructorOptions,
+    options: *const HashMap<String, String>,
 ) -> Result<*mut c_void, OpenDALError> {
     let scheme = require_cstr(scheme, "scheme")?;
     let options = if options.is_null() {
-        OpendalConstructorOptions::default().into_values()
+        HashMap::default()
     } else {
-        unsafe { (&*options).clone().into_values() }
+        unsafe { (&*options).clone() }
     };
     let op =
         opendal::Operator::via_iter(scheme, options).map_err(OpenDALError::from_opendal_error)?;
