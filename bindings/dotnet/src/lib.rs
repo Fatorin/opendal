@@ -25,6 +25,7 @@ mod capability;
 mod entry;
 mod error;
 mod executor;
+mod logging;
 mod metadata;
 mod operator;
 mod operator_info;

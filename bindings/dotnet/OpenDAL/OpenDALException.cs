@@ -47,6 +47,20 @@ public class OpenDALException : Exception
         Code = parsed;
     }
 
+    /// <summary>
+    /// Initializes a new exception from an already decoded code and message.
+    /// </summary>
+    /// <param name="code">Error code to report through <see cref="Code"/>.</param>
+    /// <param name="message">Message describing the failure.</param>
+    /// <remarks>
+    /// Useful when an error is observed somewhere other than a native result,
+    /// such as a log event, and needs to be surfaced as an exception.
+    /// </remarks>
+    public OpenDALException(ErrorCode code, string message) : base(message)
+    {
+        Code = code;
+    }
+
     private static bool TryParse(int value, out ErrorCode result)
     {
         if ((uint)value <= (uint)ErrorCode.RangeNotSatisfied)

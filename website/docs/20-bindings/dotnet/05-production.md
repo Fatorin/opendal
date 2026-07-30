@@ -45,10 +45,111 @@ The .NET binding exposes these layers in `OpenDAL.Layer`:
 |-------|--------------|
 | `RetryLayer` | Retries transient failures with exponential backoff (`MaxTimes`, `MinDelay`, `MaxDelay`, `Factor`, `Jitter`). |
 | `TimeoutLayer` | Bounds slow calls with a total `Timeout` and a per-I/O `IoTimeout`. |
-| `ConcurrentLimitLayer` | Caps the number of concurrent operations (constructor takes the permit count). |
+| `ConcurrentLimitLayer` | Caps concurrent operations, with an optional second argument for concurrent HTTP requests. |
+| `ThrottleLayer` | Rate-limits the byte flow of reads and writes (`bandwidth` per second, `burst` at once). |
+| `LoggingLayer` | Reports every operation to `OpenDALLogging.Handler`. See [Logging](#logging). |
+| `MimeGuessLayer` | Fills in `Content-Type` from the path extension when nothing else set one. |
 | `CapabilityOverrideLayer` | Overrides reported capabilities. |
 
 See [Concepts](../../03-concepts.mdx#layer) for the model.
+
+## Logging
+
+`LoggingLayer` reports each operation to a process-wide handler. Set the handler
+and the level before applying the layer:
+
+```csharp
+using OpenDAL.Layer;
+using OpenDAL.Logging;
+
+OpenDALLogging.MinimumLevel = OpenDALLogLevel.Debug;
+OpenDALLogging.Handler = (in OpenDALLogEvent evt) =>
+{
+    Console.WriteLine(Encoding.UTF8.GetString(evt.Message));
+};
+
+using var op = baseOp.WithLayer(new LoggingLayer());
+```
+
+The event is a `ref struct` over native memory and is valid only until the handler
+returns. The compiler rejects storing it, capturing it in a lambda, or carrying it
+across an `await`, so copy out what you need first.
+
+Asynchronous operations report from native worker threads, so the handler runs
+concurrently and must be thread-safe. Exceptions it throws are swallowed, because
+letting one reach native code would abort the process.
+
+### Bridging to Microsoft.Extensions.Logging
+
+The binding does not depend on a logging framework. This handler forwards events
+to `ILogger`, which covers Serilog, NLog, and log4net:
+
+```csharp
+var loggers = new ConcurrentDictionary<string, ILogger>();
+
+OpenDALLogging.Handler = (in OpenDALLogEvent evt) =>
+{
+    var scheme = Encoding.UTF8.GetString(evt.Scheme);
+    var logger = loggers.GetOrAdd(scheme, s => loggerFactory.CreateLogger($"OpenDAL.{s}"));
+
+    var level = evt.Level switch
+    {
+        OpenDALLogLevel.Error => LogLevel.Error,
+        OpenDALLogLevel.Warning => LogLevel.Warning,
+        OpenDALLogLevel.Information => LogLevel.Information,
+        OpenDALLogLevel.Trace => LogLevel.Trace,
+        _ => LogLevel.Debug,
+    };
+
+    if (!logger.IsEnabled(level))
+    {
+        return;
+    }
+
+    // Passing the context as key/value pairs rather than a formatted string lets
+    // structured providers index it.
+    var state = new List<KeyValuePair<string, object?>>
+    {
+        new("operation", evt.Operation.ToString()),
+        new("event", Encoding.UTF8.GetString(evt.Message)),
+    };
+
+    for (var i = 0; i < evt.ContextCount; i++)
+    {
+        state.Add(new KeyValuePair<string, object?>(
+            Encoding.UTF8.GetString(evt.GetContextKey(i)),
+            Encoding.UTF8.GetString(evt.GetContextValue(i))));
+    }
+
+    Exception? error = null;
+    if (evt.TryGetError(out var code, out var errorMessage))
+    {
+        error = new OpenDALException(code, Encoding.UTF8.GetString(errorMessage));
+    }
+
+    logger.Log(level, default, state, error, static (s, _) => "OpenDAL");
+};
+```
+
+The error goes in the `exception` argument so structured sinks can group failures
+by it. `OpenDALException.Code` matches the code a failed call throws.
+
+### Level filtering
+
+`MinimumLevel` defaults to `Debug`, so leaving it alone loses no events. They then
+cross into managed code and the logging framework's filter discards them, after
+the handler has already decoded at least the scheme. Setting `MinimumLevel` to
+match the framework's level avoids that work.
+
+The native side caches the level so it can reject events without calling into
+managed code, which also means it does not see an `appsettings.json` reload or a
+Serilog level switch. Assign `MinimumLevel` again from that notification.
+
+### Layer order
+
+Apply the layer last so it sits outermost. Nesting it inside `RetryLayer` reports
+each retry attempt as its own event, because retries happen inside that layer.
+`RetryLayer` reports attempts through its own interceptor.
 
 ## Error handling
 

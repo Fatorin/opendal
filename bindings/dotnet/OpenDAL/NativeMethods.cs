@@ -20,6 +20,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using OpenDAL.Interop.Result;
+using OpenDAL.Logging;
 
 namespace OpenDAL;
 
@@ -184,6 +185,17 @@ internal partial class NativeMethods
     internal static partial OpenDALOperatorResult operator_layer_mime_guess(
         Operator op
     );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_layer_logging")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALOperatorResult operator_layer_logging(
+        Operator op,
+        delegate* unmanaged[Cdecl]<OpenDALLogEventRef*, void> callback
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "logging_set_min_level")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void logging_set_min_level(byte level);
 
     #endregion
 
