@@ -25,9 +25,9 @@ use crate::{
     options::{parse_list_options, parse_read_options, parse_stat_options, parse_write_options},
     presign::into_presigned_request_ptr,
     result::{
-        OpendalEntryListResult, OpendalMetadataResult, OpendalOperatorInfoResult,
-        OpendalOperatorResult, OpendalOptionsResult, OpendalPresignedRequestResult,
-        OpendalReadResult, OpendalResult,
+        OpendalBoolResult, OpendalEntryListResult, OpendalMetadataResult,
+        OpendalOperatorInfoResult, OpendalOperatorResult, OpendalOptionsResult,
+        OpendalPresignedRequestResult, OpendalReadResult, OpendalResult,
     },
     utils::{collect_options, require_callback, require_cstr, require_data_ptr, require_operator},
     validators::prelude::{
@@ -50,6 +50,7 @@ type ReadCallback = extern "C" fn(context: i64, result: OpendalReadResult);
 type StatCallback = extern "C" fn(context: i64, result: OpendalMetadataResult);
 type ListCallback = extern "C" fn(context: i64, result: OpendalEntryListResult);
 type PresignCallback = extern "C" fn(context: i64, result: OpendalPresignedRequestResult);
+type BoolCallback = extern "C" fn(context: i64, result: OpendalBoolResult);
 
 /// Build constructor options from raw C string key/value arrays.
 ///
@@ -565,6 +566,90 @@ pub extern "C" fn operator_duplicate(op: *const opendal::Operator) -> OpendalOpe
 fn operator_duplicate_inner(op: *const opendal::Operator) -> Result<*mut c_void, OpenDALError> {
     let op = require_operator(op)?;
     Ok(Box::into_raw(Box::new(op.clone())) as *mut c_void)
+}
+
+/// Check whether `path` exists synchronously.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_exists(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> OpendalBoolResult {
+    match operator_exists_inner(op, executor, path) {
+        Ok(value) => OpendalBoolResult::ok(value as u8),
+        Err(error) => OpendalBoolResult::from_error(error),
+    }
+}
+
+fn operator_exists_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+) -> Result<bool, OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?;
+
+    executor
+        .block_on(op.exists(path))
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Check whether `path` exists asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_exists_async(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<BoolCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_exists_async_inner(op, executor, path, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_exists_async_inner(
+    op: *const opendal::Operator,
+    executor: *const c_void,
+    path: *const c_char,
+    callback: Option<BoolCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let op = require_operator(op)?;
+    let executor = executor_or_default(executor)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+
+    let op = op.clone();
+    executor.spawn(async move {
+        let result = op
+            .exists(&path)
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalBoolResult::ok(value as u8),
+                Err(error) => OpendalBoolResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
 }
 
 /// Delete `path` synchronously.

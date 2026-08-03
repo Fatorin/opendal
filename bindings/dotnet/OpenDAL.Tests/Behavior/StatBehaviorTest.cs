@@ -30,6 +30,25 @@ public sealed class StatBehaviorTest : BehaviorTestBase
     }
 
     [Fact]
+    public async Task StatBehavior_Exists_ReportsPresenceAndAbsence()
+    {
+        if (!Supports(c => c.Write && c.Stat))
+        {
+            return;
+        }
+
+        var path = NewPath("exists");
+
+        Assert.False(Op.Exists(path));
+        Assert.False(await Op.ExistsAsync(path, cancellationToken: CT));
+
+        Op.Write(path, RandomBytes(16));
+
+        Assert.True(Op.Exists(path));
+        Assert.True(await Op.ExistsAsync(path, cancellationToken: CT));
+    }
+
+    [Fact]
     public void StatBehavior_ReturnsFileMetadata()
     {
         if (!Supports(c => c.Stat && c.Write))

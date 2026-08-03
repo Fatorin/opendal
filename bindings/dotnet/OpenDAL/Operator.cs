@@ -595,6 +595,55 @@ public partial class Operator : SafeHandle
     }
 
     /// <summary>
+    /// Checks whether the specified path exists.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <returns><see langword="true"/> when the path exists.</returns>
+    /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
+    /// <exception cref="OpenDALException">Native existence check fails.</exception>
+    public bool Exists(string path, Executor? executor = null)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        var result = NativeMethods.operator_exists(this, executorHandle, path);
+        return ToValueOrThrowAndRelease<bool, OpenDALBoolResult>(result);
+    }
+
+    /// <summary>
+    /// Checks asynchronously whether the specified path exists.
+    /// </summary>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="executor">Executor used for this operation, or <see langword="null"/> to use default executor.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that resolves with <see langword="true"/> when the path exists.</returns>
+    /// <exception cref="ObjectDisposedException">The operator or executor has been disposed.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is already canceled.</exception>
+    /// <exception cref="OpenDALException">Native submission fails immediately.</exception>
+    public Task<bool> ExistsAsync(string path, Executor? executor = null, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var executorHandle = GetExecutorHandle(executor);
+
+        return SubmitAsyncOperation<bool>(SubmitExistsAsync, cancellationToken);
+
+        OpenDALResult SubmitExistsAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_exists_async(
+                    this,
+                    executorHandle,
+                    path,
+                    &OnExistsCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
     /// Deletes the file at the specified path.
     /// </summary>
     /// <param name="path">Target path in the configured backend.</param>
@@ -1540,6 +1589,17 @@ public partial class Operator : SafeHandle
     private static void OnReadCompleted(long context, OpenDALReadResult result)
     {
         CompleteAsyncCallback<byte[], OpenDALReadResult>(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous existence check finishes.
+    /// </summary>
+    /// <param name="context">Opaque async state context previously registered by <see cref="AsyncStateRegistry"/>.</param>
+    /// <param name="result">Existence result returned by the native layer.</param>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnExistsCompleted(long context, OpenDALBoolResult result)
+    {
+        CompleteAsyncCallback<bool, OpenDALBoolResult>(context, result);
     }
 
     /// <summary>
