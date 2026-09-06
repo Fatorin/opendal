@@ -39,6 +39,35 @@ Use [`crate::GoosefsConfig`] for serializable configuration and this builder's
 methods for direct construction. The field and method documentation defines
 accepted values, defaults, and environment interaction.
 
+### Master address resolution
+
+`build()` resolves the master addresses from three sources, highest priority
+first:
+
+1. the `GOOSEFS_MASTER_ADDR` environment variable, either a comma-separated
+   list or the SDK's `gfs://h1:9200,h2:9200/root` URI form;
+2. `goosefs.master.rpc.addresses` or `goosefs.master.hostname` in
+   `goosefs-site.properties`, discovered through `$GOOSEFS_CONFIG_FILE`,
+   `$GOOSEFS_HOME/conf`, `~/.goosefs`, and `/etc/goosefs`. `goosefs-sdk` 0.1.9
+   documents `$GOOSEFS_CONF_DIR` as a search path but does not read it, so use
+   `$GOOSEFS_CONFIG_FILE` to point at a file outside those directories;
+3. the `master_addr` config key, which also receives the URI authority of
+   `goosefs://host:port/path`.
+
+A site file that declares masters outranks `master_addr` because the file
+carries a deployment's whole HA master list, which a single URI authority
+cannot express. Set `GOOSEFS_MASTER_ADDR` to override a deployed site file for
+one process. `build()` fails with `ConfigInvalid` when no source supplies an
+address; it never falls back to `127.0.0.1:9200`.
+
+| `goosefs-site.properties` | `GOOSEFS_MASTER_ADDR` | `master_addr` / URI authority | Master addresses used |
+| --- | --- | --- | --- |
+| declares masters | set | any | `GOOSEFS_MASTER_ADDR` |
+| declares masters | unset | any or absent | site file |
+| absent, or no master keys | set | any | `GOOSEFS_MASTER_ADDR` |
+| absent, or no master keys | unset | set | `master_addr` |
+| absent, or no master keys | unset | absent | none — `ConfigInvalid` |
+
 ## Example
 
 ### Via Builder
@@ -140,8 +169,7 @@ This service is covered by all three OpenDAL test layers:
    `create_dir`). Start the fixture and point the harness at it:
 
    ```shell
-   # Start a single-container GooseFS (master + worker + job_master +
-   # job_worker + table_master)
+   # Start a single-container GooseFS (master + worker; see start-default.sh)
    docker compose -f fixtures/goosefs/docker-compose-goosefs.yml up -d --wait
 
    OPENDAL_TEST=goosefs \
@@ -158,7 +186,7 @@ This service is covered by all three OpenDAL test layers:
 3. **GitHub CI** — `.github/services/goosefs/goosefs/action.yml` is picked up
    automatically by `.github/scripts/test_behavior/plan.py::provided_cases()`
    and runs the fixture + behavior suite on every PR. The fixture image
-   (`goosefs.tencentcloudcr.com/goosefs/repo:v2.1.0`) is public so no secrets
+   (`ghcr.io/tencent/tencent-goosefs-rust-sdk/goosefs:v2.0.0`) is public so no secrets
    are needed.
 
 The fixture also exposes a `distributed` compose profile (separate master /
