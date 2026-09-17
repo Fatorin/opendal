@@ -123,8 +123,9 @@ await using (var writer = op.OpenWriteStream("big.bin"))
 }
 ```
 
-`OpenWriteStream` also accepts a `bufferSize` argument that controls how much is
-buffered before flushing to the backend.
+Like `Write`, `Complete` and `CompleteAsync` return the metadata of the new
+object. `OpenWriteStream` also accepts a `bufferSize` argument that controls
+how much is buffered before flushing to the backend.
 
 ## Check existence and metadata
 

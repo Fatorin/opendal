@@ -162,6 +162,42 @@ public sealed class StreamBehaviorTest : BehaviorTestBase
     }
 
     [Fact]
+    public void StreamBehavior_Complete_ReturnsMetadata()
+    {
+        if (!Supports(c => c.Write))
+        {
+            return;
+        }
+
+        var path = NewPath("stream-complete-metadata");
+        var content = RandomBytes(256);
+
+        using var output = Op.OpenWriteStream(path);
+        output.Write(content, 0, content.Length);
+        var meta = output.Complete();
+
+        Assert.Equal((ulong)content.Length, meta.ContentLength);
+    }
+
+    [Fact]
+    public async Task StreamBehavior_CompleteAsync_ReturnsMetadata()
+    {
+        if (!Supports(c => c.Write))
+        {
+            return;
+        }
+
+        var path = NewPath("stream-complete-metadata-async");
+        var content = RandomBytes(256);
+
+        await using var output = Op.OpenWriteStream(path);
+        await output.WriteAsync(content.AsMemory(), CT);
+        var meta = await output.CompleteAsync(CT);
+
+        Assert.Equal((ulong)content.Length, meta.ContentLength);
+    }
+
+    [Fact]
     public async Task StreamBehavior_DisposeAsync_ClosesBestEffort()
     {
         if (!Supports(c => c.Read && c.Write))

@@ -92,7 +92,8 @@ impl std::ops::Deref for OperatorHandle {
 ///
 /// The callbacks are provided by the .NET side and must remain valid until
 /// invoked by Rust. `VoidCallback` reports success or failure only, while
-/// `MetadataCallback` carries the metadata that write, copy, and stat return.
+/// `MetadataCallback` carries the metadata that write, copy, stat, and output
+/// stream close return.
 type VoidCallback = extern "C" fn(context: i64, result: OpendalResult);
 type ReadCallback = extern "C" fn(context: i64, result: OpendalReadResult);
 type MetadataCallback = extern "C" fn(context: i64, result: OpendalMetadataResult);
@@ -1637,14 +1638,16 @@ fn operator_output_stream_flush_inner(stream: *mut c_void) -> Result<(), OpenDAL
 ///
 /// - `stream` must be a valid pointer returned by `operator_output_stream_create`.
 #[unsafe(no_mangle)]
-pub extern "C" fn operator_output_stream_close(stream: *mut c_void) -> OpendalResult {
+pub extern "C" fn operator_output_stream_close(stream: *mut c_void) -> OpendalMetadataResult {
     match operator_output_stream_close_inner(stream) {
-        Ok(()) => OpendalResult::ok(),
-        Err(error) => OpendalResult::from_error(error),
+        Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
+        Err(error) => OpendalMetadataResult::from_error(error),
     }
 }
 
-fn operator_output_stream_close_inner(stream: *mut c_void) -> Result<(), OpenDALError> {
+fn operator_output_stream_close_inner(
+    stream: *mut c_void,
+) -> Result<*mut OpendalMetadata, OpenDALError> {
     if stream.is_null() {
         return Err(crate::utils::config_invalid_error(
             "output stream pointer is null",
@@ -1656,7 +1659,7 @@ fn operator_output_stream_close_inner(stream: *mut c_void) -> Result<(), OpenDAL
     stream
         .executor
         .block_on(async move { inner.lock().await.close().await })
-        .map(|_| ())
+        .map(into_metadata_ptr)
         .map_err(OpenDALError::from_opendal_error)
 }
 
@@ -1671,7 +1674,7 @@ fn operator_output_stream_close_inner(stream: *mut c_void) -> Result<(), OpenDAL
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_output_stream_close_async(
     stream: *mut c_void,
-    callback: Option<VoidCallback>,
+    callback: Option<MetadataCallback>,
     context: i64,
 ) -> OpendalResult {
     match operator_output_stream_close_async_inner(stream, callback, context) {
@@ -1682,7 +1685,7 @@ pub unsafe extern "C" fn operator_output_stream_close_async(
 
 fn operator_output_stream_close_async_inner(
     stream: *mut c_void,
-    callback: Option<VoidCallback>,
+    callback: Option<MetadataCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
     if stream.is_null() {
@@ -1700,14 +1703,14 @@ fn operator_output_stream_close_async_inner(
             .await
             .close()
             .await
-            .map(|_| ())
+            .map(into_metadata_ptr)
             .map_err(OpenDALError::from_opendal_error);
 
         callback(
             context,
             match result {
-                Ok(()) => OpendalResult::ok(),
-                Err(error) => OpendalResult::from_error(error),
+                Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
+                Err(error) => OpendalMetadataResult::from_error(error),
             },
         );
     });

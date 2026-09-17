@@ -542,13 +542,13 @@ internal partial class NativeMethods
 
     [LibraryImport(__DllName, EntryPoint = "operator_output_stream_close")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    internal static partial OpenDALResult operator_output_stream_close(IntPtr stream);
+    internal static partial OpenDALMetadataResult operator_output_stream_close(IntPtr stream);
 
     [LibraryImport(__DllName, EntryPoint = "operator_output_stream_close_async")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static unsafe partial OpenDALResult operator_output_stream_close_async(
         IntPtr stream,
-        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        delegate* unmanaged[Cdecl]<long, OpenDALMetadataResult, void> callback,
         long context
     );
 

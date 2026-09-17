@@ -155,32 +155,34 @@ public sealed class OperatorOutputStream : Stream
     /// stream rejects further writes and disposal just releases native
     /// resources.
     /// </remarks>
+    /// <returns>Metadata of the written object.</returns>
     /// <exception cref="ObjectDisposedException">The stream has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The stream was already completed.</exception>
     /// <exception cref="OpenDALException">Native close fails.</exception>
-    public void Complete()
+    public Metadata Complete()
     {
         ThrowIfDisposed();
         FlushBuffered();
         var result = NativeMethods.operator_output_stream_close(handle);
-        Operator.ThrowIfErrorAndRelease(result);
+        var metadata = Operator.ToValueOrThrowAndRelease<Metadata, OpenDALMetadataResult>(result);
         completed = true;
+        return metadata;
     }
 
     /// <inheritdoc cref="Complete" />
     /// <param name="cancellationToken">Cancellation token for the managed task.</param>
-    public async Task CompleteAsync(CancellationToken cancellationToken = default)
+    public async Task<Metadata> CompleteAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
         await FlushBufferedAsync(cancellationToken).ConfigureAwait(false);
 
-        var context = AsyncStateRegistry.Register<bool>(out var state);
+        var context = AsyncStateRegistry.Register<Metadata>(out var state);
         OpenDALResult submit;
         unsafe
         {
             submit = NativeMethods.operator_output_stream_close_async(
-                handle, &OnStreamWriteCompleted, context);
+                handle, &OnStreamCompleted, context);
         }
 
         try
@@ -194,8 +196,9 @@ public sealed class OperatorOutputStream : Stream
         }
 
         state.BindCancellation(cancellationToken);
-        await state.Completion.Task.ConfigureAwait(false);
+        var metadata = await state.Completion.Task.ConfigureAwait(false);
         completed = true;
+        return metadata;
     }
 
     /// <summary>
@@ -251,6 +254,15 @@ public sealed class OperatorOutputStream : Stream
     private static void OnStreamWriteCompleted(long context, OpenDALResult result)
     {
         Operator.CompleteAsyncCallback(context, result);
+    }
+
+    /// <summary>
+    /// Native callback invoked when an asynchronous stream close finishes.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnStreamCompleted(long context, OpenDALMetadataResult result)
+    {
+        Operator.CompleteAsyncCallback<Metadata, OpenDALMetadataResult>(context, result);
     }
 
     public override int Read(byte[] buffer, int offset, int count)
