@@ -339,6 +339,42 @@ internal partial class NativeMethods
         long context
     );
 
+    [LibraryImport(__DllName, EntryPoint = "operator_deleter_create")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALOperatorResult operator_deleter_create(Operator op);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_deleter_delete", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_deleter_delete(
+        IntPtr deleter,
+        byte[] targets
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_deleter_delete_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_deleter_delete_async(
+        IntPtr deleter,
+        byte[] targets,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        long context
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_deleter_close")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_deleter_close(IntPtr deleter);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_deleter_close_async")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_deleter_close_async(
+        IntPtr deleter,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        long context
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_deleter_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void operator_deleter_free(IntPtr deleter);
+
     #endregion
 
     #region CreateDir

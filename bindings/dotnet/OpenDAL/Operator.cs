@@ -41,6 +41,11 @@ public partial class Operator : SafeHandle
     /// </summary>
     private const nuint ListerBatchSize = 256;
 
+    /// <summary>
+    /// Maximum number of paths handed to the native deleter per call.
+    /// </summary>
+    private const int DeleterBatchSize = 256;
+
     private readonly OperatorInfo info;
 
     private Operator(IntPtr nativeHandle) : base(IntPtr.Zero, true)
@@ -977,6 +982,114 @@ public partial class Operator : SafeHandle
                     this,
                     path,
                     nativeOptions,
+                    &OnDeleteCompleted,
+                    context
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Deletes several paths, batching the deletions where the service supports it.
+    /// </summary>
+    /// <remarks>
+    /// The targets are consumed lazily in chunks, so a large sequence such as
+    /// one from <see cref="EnumerateEntries"/> is never held in memory at
+    /// once. Deleting a missing path succeeds. When this method throws, some
+    /// of the targets may already be deleted.
+    /// </remarks>
+    /// <param name="targets">Paths to delete; a plain path converts to a <see cref="DeleteTarget"/>.</param>
+    public void DeleteMany(IEnumerable<DeleteTarget> targets)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        ArgumentNullException.ThrowIfNull(targets);
+
+        var deleter = CreateDeleter();
+        try
+        {
+            foreach (var chunk in targets.Chunk(DeleterBatchSize))
+            {
+                var batch = SerializeDeleteBatch(chunk, nameof(targets));
+                ThrowIfErrorAndRelease(NativeMethods.operator_deleter_delete(deleter, batch));
+            }
+
+            ThrowIfErrorAndRelease(NativeMethods.operator_deleter_close(deleter));
+        }
+        finally
+        {
+            NativeMethods.operator_deleter_free(deleter);
+        }
+    }
+
+    /// <summary>
+    /// Deletes several paths asynchronously, batching the deletions where the service supports it.
+    /// </summary>
+    /// <remarks>
+    /// The targets are consumed lazily in chunks, so a large sequence such as
+    /// one from <see cref="EnumerateEntries"/> is never held in memory at
+    /// once. Deleting a missing path succeeds. When the task faults or is
+    /// canceled, some of the targets may already be deleted.
+    /// </remarks>
+    /// <param name="targets">Paths to delete; a plain path converts to a <see cref="DeleteTarget"/>.</param>
+    /// <param name="cancellationToken">Cancellation token for the managed task.</param>
+    /// <returns>A task that completes when every deletion is applied.</returns>
+    public async Task DeleteManyAsync(IEnumerable<DeleteTarget> targets, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        ArgumentNullException.ThrowIfNull(targets);
+
+        var deleter = CreateDeleter();
+        try
+        {
+            foreach (var chunk in targets.Chunk(DeleterBatchSize))
+            {
+                await SubmitDeleteBatchAsync(deleter, chunk, cancellationToken).ConfigureAwait(false);
+            }
+
+            await SubmitAsyncOperation(SubmitCloseAsync, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // A call abandoned by cancellation keeps the native deleter alive
+            // until it completes, so freeing the handle here is safe.
+            NativeMethods.operator_deleter_free(deleter);
+        }
+
+        OpenDALResult SubmitCloseAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_deleter_close_async(deleter, &OnDeleteCompleted, context);
+            }
+        }
+    }
+
+    private IntPtr CreateDeleter()
+    {
+        var result = NativeMethods.operator_deleter_create(this);
+        return ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result);
+    }
+
+    private static byte[] SerializeDeleteBatch(DeleteTarget?[] chunk, string paramName)
+    {
+        return NativeOptionsBuilder.SerializeItems(chunk, target => target.Path, target => target.Options, paramName);
+    }
+
+    private static Task SubmitDeleteBatchAsync(
+        IntPtr deleter,
+        DeleteTarget[] chunk,
+        CancellationToken cancellationToken)
+    {
+        var batch = SerializeDeleteBatch(chunk, "targets");
+        return SubmitAsyncOperation(SubmitAsync, cancellationToken);
+
+        OpenDALResult SubmitAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_deleter_delete_async(
+                    deleter,
+                    batch,
                     &OnDeleteCompleted,
                     context
                 );

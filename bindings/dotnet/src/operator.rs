@@ -1659,6 +1659,225 @@ pub unsafe extern "C" fn operator_lister_free(lister: *mut c_void) {
     }
 }
 
+/// A batching deleter behind an opaque handle.
+struct EntryDeleter {
+    executor: Arc<Executor>,
+    inner: Arc<Mutex<opendal::Deleter>>,
+}
+
+fn require_deleter<'a>(deleter: *mut c_void) -> Result<&'a EntryDeleter, OpenDALError> {
+    if deleter.is_null() {
+        return Err(config_invalid_error("deleter handle is null"));
+    }
+
+    Ok(unsafe { &*(deleter as *const EntryDeleter) })
+}
+
+/// Create a deleter that batches deletions where the service supports it.
+///
+/// Queued deletions are only guaranteed to be applied once
+/// `operator_deleter_close*` succeeds. On success, the returned handle must be
+/// released by `operator_deleter_free`.
+/// # Safety
+///
+/// - `op_handle` must be a valid operator pointer from `operator_construct`.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_deleter_create(
+    op_handle: *const OperatorHandle,
+) -> OpendalOperatorResult {
+    match operator_deleter_create_inner(op_handle) {
+        Ok(value) => OpendalOperatorResult::ok(value),
+        Err(error) => OpendalOperatorResult::from_error(error),
+    }
+}
+
+fn operator_deleter_create_inner(
+    op_handle: *const OperatorHandle,
+) -> Result<*mut c_void, OpenDALError> {
+    let handle = require_op_handle(op_handle)?;
+    let executor = handle.executor.clone();
+    let deleter = executor
+        .block_on(handle.deleter())
+        .map_err(OpenDALError::from_opendal_error)?;
+
+    Ok(Box::into_raw(Box::new(EntryDeleter {
+        executor,
+        inner: Arc::new(Mutex::new(deleter)),
+    })) as *mut c_void)
+}
+
+/// Queue `targets` for deletion synchronously.
+/// # Safety
+///
+/// - `deleter` must be a valid handle from `operator_deleter_create`.
+/// - `targets` must be a valid null-terminated UTF-8 JSON array of
+///   `{"path": ..., "options": {...}}` items, where `options` is optional.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_deleter_delete(
+    deleter: *mut c_void,
+    targets: *const c_char,
+) -> OpendalResult {
+    match unsafe { operator_deleter_delete_inner(deleter, targets) } {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+unsafe fn operator_deleter_delete_inner(
+    deleter: *mut c_void,
+    targets: *const c_char,
+) -> Result<(), OpenDALError> {
+    let deleter = require_deleter(deleter)?;
+    let items = parse_path_items::<DeleteOptionsJson>(targets, "targets")?;
+
+    let inner = deleter.inner.clone();
+    deleter
+        .executor
+        .block_on(async move { inner.lock().await.delete_iter(items).await })
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Queue `targets` for deletion asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `deleter` must be a valid handle from `operator_deleter_create`.
+/// - `targets` must be a valid null-terminated UTF-8 JSON array of
+///   `{"path": ..., "options": {...}}` items, where `options` is optional.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_deleter_delete_async(
+    deleter: *mut c_void,
+    targets: *const c_char,
+    callback: Option<VoidCallback>,
+    context: i64,
+) -> OpendalResult {
+    match unsafe { operator_deleter_delete_async_inner(deleter, targets, callback, context) } {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+unsafe fn operator_deleter_delete_async_inner(
+    deleter: *mut c_void,
+    targets: *const c_char,
+    callback: Option<VoidCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let deleter = require_deleter(deleter)?;
+    let items = parse_path_items::<DeleteOptionsJson>(targets, "targets")?;
+    let callback = require_callback(callback)?;
+
+    let inner = deleter.inner.clone();
+    deleter.executor.spawn(async move {
+        let result = inner
+            .lock()
+            .await
+            .delete_iter(items)
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Apply every queued deletion synchronously.
+/// # Safety
+///
+/// - `deleter` must be a valid handle from `operator_deleter_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_deleter_close(deleter: *mut c_void) -> OpendalResult {
+    match operator_deleter_close_inner(deleter) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_deleter_close_inner(deleter: *mut c_void) -> Result<(), OpenDALError> {
+    let deleter = require_deleter(deleter)?;
+
+    let inner = deleter.inner.clone();
+    deleter
+        .executor
+        .block_on(async move { inner.lock().await.close().await })
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Apply every queued deletion asynchronously.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `deleter` must be a valid handle from `operator_deleter_create`.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_deleter_close_async(
+    deleter: *mut c_void,
+    callback: Option<VoidCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_deleter_close_async_inner(deleter, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_deleter_close_async_inner(
+    deleter: *mut c_void,
+    callback: Option<VoidCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let deleter = require_deleter(deleter)?;
+    let callback = require_callback(callback)?;
+
+    let inner = deleter.inner.clone();
+    deleter.executor.spawn(async move {
+        let result = inner
+            .lock()
+            .await
+            .close()
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Release a deleter handle without applying pending deletions.
+///
+/// A pending asynchronous call keeps the deleter alive until it completes.
+/// # Safety
+///
+/// - `deleter` must be null or a handle from `operator_deleter_create`.
+/// - This function must be called at most once for the same handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_deleter_free(deleter: *mut c_void) {
+    if deleter.is_null() {
+        return;
+    }
+
+    unsafe {
+        drop(Box::from_raw(deleter as *mut EntryDeleter));
+    }
+}
+
 /// Create an output stream for `path` with write options.
 ///
 /// Returned pointer must be released by `operator_output_stream_free`.
