@@ -146,7 +146,7 @@ pub struct DeleteOptions {
     /// service does not support the derived primitive condition, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// a version nor an ETag.
-    #[serde(deserialize_with = "de::option_metadata_identity")]
+    #[serde(deserialize_with = "serde_repr::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 }
 
@@ -199,7 +199,7 @@ pub struct ReadOptions {
     /// - `BytesRange::suffix(1024)` means read the last `min(1024, n)` bytes of file
     ///
     /// The type implements `From<RangeBounds<u64>>`, so users can use `(1024..).into()` instead.
-    #[serde(deserialize_with = "de::bytes_range")]
+    #[serde(deserialize_with = "serde_repr::bytes_range")]
     pub range: BytesRange,
     /// Read the given version of the file instead of the current one.
     ///
@@ -266,7 +266,7 @@ pub struct ReadOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_modified_since`].
-    #[serde(deserialize_with = "de::option_timestamp_millis")]
+    #[serde(deserialize_with = "serde_repr::option_timestamp_millis")]
     pub if_modified_since: Option<Timestamp>,
     /// Read only when the file was not modified after this timestamp.
     ///
@@ -278,7 +278,7 @@ pub struct ReadOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_unmodified_since`].
-    #[serde(deserialize_with = "de::option_timestamp_millis")]
+    #[serde(deserialize_with = "serde_repr::option_timestamp_millis")]
     pub if_unmodified_since: Option<Timestamp>,
 
     /// Known content length of the object.
@@ -421,7 +421,7 @@ pub struct ReaderOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_modified_since`].
-    #[serde(deserialize_with = "de::option_timestamp_millis")]
+    #[serde(deserialize_with = "serde_repr::option_timestamp_millis")]
     pub if_modified_since: Option<Timestamp>,
     /// Read only when the file was not modified after this timestamp.
     ///
@@ -433,7 +433,7 @@ pub struct ReaderOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_unmodified_since`].
-    #[serde(deserialize_with = "de::option_timestamp_millis")]
+    #[serde(deserialize_with = "serde_repr::option_timestamp_millis")]
     pub if_unmodified_since: Option<Timestamp>,
 
     /// Known content length of the object.
@@ -576,7 +576,7 @@ pub struct StatOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::stat_with_if_modified_since`].
-    #[serde(deserialize_with = "de::option_timestamp_millis")]
+    #[serde(deserialize_with = "serde_repr::option_timestamp_millis")]
     pub if_modified_since: Option<Timestamp>,
     /// Stat only when the file was not modified after this timestamp.
     ///
@@ -588,7 +588,7 @@ pub struct StatOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::stat_with_if_unmodified_since`].
-    #[serde(deserialize_with = "de::option_timestamp_millis")]
+    #[serde(deserialize_with = "serde_repr::option_timestamp_millis")]
     pub if_unmodified_since: Option<Timestamp>,
 
     /// Specify the content-type header that should be sent back by the operation.
@@ -815,7 +815,7 @@ pub struct WriteOptions {
     /// service does not support the derived primitive condition, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// a version nor an ETag.
-    #[serde(deserialize_with = "de::option_metadata_identity")]
+    #[serde(deserialize_with = "serde_repr::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 
     /// Sets concurrent write operations for this writer.
@@ -900,7 +900,7 @@ pub struct ComposeSourceOptions {
     /// support the derived source option, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// identity.
-    #[serde(deserialize_with = "de::option_metadata_identity")]
+    #[serde(deserialize_with = "serde_repr::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 }
 
@@ -939,7 +939,7 @@ pub struct ComposeOptions {
     /// [`crate::ErrorKind::Unsupported`] when the service does not support the
     /// derived primitive condition, and [`crate::ErrorKind::ConfigInvalid`]
     /// when the metadata contains neither a version nor an ETag.
-    #[serde(deserialize_with = "de::option_metadata_identity")]
+    #[serde(deserialize_with = "serde_repr::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
     /// Maximum number of independent backend composition tasks.
     ///
@@ -1041,7 +1041,7 @@ pub struct CopyOptions {
     /// service does not support the derived primitive condition, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// a version nor an ETag.
-    #[serde(deserialize_with = "de::option_metadata_identity")]
+    #[serde(deserialize_with = "serde_repr::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 
     /// Copy from a specific source file version.
@@ -1150,8 +1150,16 @@ pub struct RestoreOptions {
     pub if_not_exists: bool,
 }
 
-/// Representations of the field types that have no serde format of their own.
-mod de {
+/// Serde representations of the option field types that have no serde
+/// format of their own: `Timestamp`, `Metadata`, and `BytesRange`.
+///
+/// The options apply them through field-level `deserialize_with` instead of
+/// these types implementing `Deserialize`, because the representations only
+/// make sense for options. `if_not_changed`, for example, reads only the ETag
+/// and version of a `Metadata`, which would be a surprising format for
+/// `Metadata` in general. Changing the field types instead would break the
+/// public options API.
+mod serde_repr {
     use serde::Deserialize;
     use serde::Deserializer;
     use serde::de::Error as _;
