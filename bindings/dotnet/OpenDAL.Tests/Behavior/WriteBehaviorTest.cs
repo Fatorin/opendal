@@ -419,4 +419,57 @@ public sealed class WriteBehaviorTest : BehaviorTestBase
         Assert.NotNull(meta.UserMetadata);
         Assert.Equal("everywhere", meta.UserMetadata["location"]);
     }
+
+    [Fact]
+    public async Task WriteBehavior_IfNotChanged_RejectsStaleMetadataAsync()
+    {
+        if (!Supports(c => c.Write && c.Stat && (c.WriteWithIfMatch || c.WriteWithIfVersionMatch)))
+        {
+            return;
+        }
+
+        var path = NewPath("write-if-not-changed");
+        await Op.WriteAsync(path, RandomBytes(64), cancellationToken: CT);
+        var expected = await Op.StatAsync(path, cancellationToken: CT);
+
+        var replacement = RandomBytes(96);
+        await Op.WriteAsync(path, replacement, new WriteOptions { IfNotChanged = expected }, CT);
+
+        var ex = await Assert.ThrowsAsync<OpenDALException>(
+            () => Op.WriteAsync(path, RandomBytes(32), new WriteOptions { IfNotChanged = expected }, CT));
+        Assert.Equal(ErrorCode.ConditionNotMatch, ex.Code);
+        Assert.Equal(replacement, await Op.ReadAsync(path, cancellationToken: CT));
+    }
+
+    [Fact]
+    public async Task WriteBehavior_ConcurrentWrites_KeepEachCallsOptionsAsync()
+    {
+        // The race this guards against is in the binding, not the service, and
+        // it needs many concurrent calls to show, so only memory runs it.
+        if (!IsService("memory") || !Supports(c => c.Write && c.Stat && c.WriteWithContentType))
+        {
+            return;
+        }
+
+        // Each thread serializes options through its own reused JSON writer,
+        // so concurrent calls must never see each other's options.
+        var writes = Enumerable.Range(0, 1000).Select(i => Task.Run(async () =>
+        {
+            var path = NewPath($"write-concurrent-{i}");
+            var options = new WriteOptions { ContentType = $"text/x-{i}-{new string('a', i % 64)}" };
+            if (i % 2 == 0)
+            {
+                Op.Write(path, new byte[] { 1 }, options);
+            }
+            else
+            {
+                await Op.WriteAsync(path, new byte[] { 1 }, options, CT);
+            }
+
+            var meta = await Op.StatAsync(path, cancellationToken: CT);
+            Assert.Equal(options.ContentType, meta.ContentType);
+        }, CT));
+
+        await Task.WhenAll(writes);
+    }
 }

@@ -20,9 +20,12 @@
 namespace OpenDAL.Options.Abstractions;
 
 /// <summary>
-/// Represents operation options that can build native option payload handles.
+/// Operation options that add themselves to a <see cref="NativeOptionsBuilder"/>.
 /// </summary>
-public interface IOptions
+internal interface IOptions
 {
-    NativeOptionsHandle BuildNativeOptionsHandle();
+    /// <summary>
+    /// Validates the options and adds each one that differs from its default.
+    /// </summary>
+    void Build(NativeOptionsBuilder builder);
 }

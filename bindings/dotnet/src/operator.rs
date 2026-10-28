@@ -23,18 +23,17 @@ use crate::{
     metadata::OpendalMetadata,
     operator_info::{OpendalOperatorInfo, into_operator_info},
     options::{
-        parse_delete_options, parse_list_options, parse_read_options, parse_stat_options,
-        parse_write_options,
+        CopyOptionsJson, DeleteOptionsJson, ListOptionsJson, ReadOptionsJson, RenameOptionsJson,
+        StatOptionsJson, WriteOptionsJson, parse_options, parse_string_map,
     },
     presign::into_presigned_request_ptr,
     result::{
         OpendalBoolResult, OpendalEntryListResult, OpendalMetadataResult,
-        OpendalOperatorInfoResult, OpendalOperatorResult, OpendalOptionsResult,
-        OpendalPresignedRequestResult, OpendalReadResult, OpendalResult,
+        OpendalOperatorInfoResult, OpendalOperatorResult, OpendalPresignedRequestResult,
+        OpendalReadResult, OpendalResult,
     },
     utils::{
-        collect_options, release_c_string, require_callback, require_cstr, require_data_ptr,
-        require_op_handle,
+        release_c_string, require_callback, require_cstr, require_data_ptr, require_op_handle,
     },
     validators::prelude::{
         validate_concurrent_limit_options, validate_retry_options, validate_throttle_options,
@@ -42,7 +41,6 @@ use crate::{
     },
 };
 
-use std::collections::HashMap;
 use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::sync::Arc;
@@ -103,213 +101,20 @@ type MetadataCallback = extern "C" fn(context: i64, result: OpendalMetadataResul
 type ListCallback = extern "C" fn(context: i64, result: OpendalEntryListResult);
 type PresignCallback = extern "C" fn(context: i64, result: OpendalPresignedRequestResult);
 
-/// Collect key/value arrays, parse them with `parse`, and box the result into
-/// an options payload released by the matching `*_option_free`.
-///
-/// # Safety
-///
-/// Same contract as the exported `*_option_build` functions.
-unsafe fn build_options<T>(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-    parse: impl FnOnce(HashMap<String, String>) -> Result<T, OpenDALError>,
-) -> OpendalOptionsResult {
-    match unsafe { collect_options(keys, values, len) }.and_then(parse) {
-        Ok(options) => OpendalOptionsResult::ok(Box::into_raw(Box::new(options)) as *mut c_void),
-        Err(error) => OpendalOptionsResult::from_error(error),
-    }
-}
-
-/// Release an options payload produced by `build_options`.
-///
-/// # Safety
-///
-/// - `options` must be null or a pointer returned by `build_options` for the
-///   same `T`.
-/// - This function must be called at most once for the same pointer.
-unsafe fn free_options<T>(options: *mut T) {
-    if options.is_null() {
-        return;
-    }
-
-    drop(unsafe { Box::from_raw(options) });
-}
-
-/// Build constructor options from raw C string key/value arrays.
-///
-/// On success, the returned pointer must be released by
-/// `constructor_option_free`.
-/// # Safety
-///
-/// - When `len > 0`, `keys` and `values` must be non-null pointers to arrays
-///   containing at least `len` C-string pointers.
-/// - Each key/value entry must be a valid null-terminated UTF-8 string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn constructor_option_build(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-) -> OpendalOptionsResult {
-    unsafe { build_options(keys, values, len, Ok) }
-}
-
-/// # Safety
-///
-/// - `options` must be null or a pointer returned by
-///   `constructor_option_build`.
-/// - This function must be called at most once for the same pointer.
-#[unsafe(no_mangle)]
-pub extern "C" fn constructor_option_free(options: *mut HashMap<String, String>) {
-    unsafe { free_options(options) }
-}
-
-/// Build read options from raw C string key/value arrays.
-///
-/// On success, the returned pointer must be released by `read_option_free`.
-/// # Safety
-///
-/// - When `len > 0`, `keys` and `values` must be non-null pointers to arrays
-///   containing at least `len` C-string pointers.
-/// - Each key/value entry must be a valid null-terminated UTF-8 string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn read_option_build(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-) -> OpendalOptionsResult {
-    unsafe { build_options(keys, values, len, |values| parse_read_options(&values)) }
-}
-
-/// # Safety
-///
-/// - `options` must be null or a pointer returned by `read_option_build`.
-/// - This function must be called at most once for the same pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn read_option_free(options: *mut opendal::options::ReadOptions) {
-    unsafe { free_options(options) }
-}
-
-/// Build write options from raw C string key/value arrays.
-///
-/// On success, the returned pointer must be released by `write_option_free`.
-/// # Safety
-///
-/// - When `len > 0`, `keys` and `values` must be non-null pointers to arrays
-///   containing at least `len` C-string pointers.
-/// - Each key/value entry must be a valid null-terminated UTF-8 string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn write_option_build(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-) -> OpendalOptionsResult {
-    unsafe { build_options(keys, values, len, |values| parse_write_options(&values)) }
-}
-
-/// # Safety
-///
-/// - `options` must be null or a pointer returned by `write_option_build`.
-/// - This function must be called at most once for the same pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn write_option_free(options: *mut opendal::options::WriteOptions) {
-    unsafe { free_options(options) }
-}
-
-/// Build stat options from raw C string key/value arrays.
-///
-/// On success, the returned pointer must be released by `stat_option_free`.
-/// # Safety
-///
-/// - When `len > 0`, `keys` and `values` must be non-null pointers to arrays
-///   containing at least `len` C-string pointers.
-/// - Each key/value entry must be a valid null-terminated UTF-8 string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn stat_option_build(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-) -> OpendalOptionsResult {
-    unsafe { build_options(keys, values, len, |values| parse_stat_options(&values)) }
-}
-
-/// # Safety
-///
-/// - `options` must be null or a pointer returned by `stat_option_build`.
-/// - This function must be called at most once for the same pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn stat_option_free(options: *mut opendal::options::StatOptions) {
-    unsafe { free_options(options) }
-}
-
-/// Build list options from raw C string key/value arrays.
-///
-/// On success, the returned pointer must be released by `list_option_free`.
-/// # Safety
-///
-/// - When `len > 0`, `keys` and `values` must be non-null pointers to arrays
-///   containing at least `len` C-string pointers.
-/// - Each key/value entry must be a valid null-terminated UTF-8 string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn list_option_build(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-) -> OpendalOptionsResult {
-    unsafe { build_options(keys, values, len, |values| parse_list_options(&values)) }
-}
-
-/// # Safety
-///
-/// - `options` must be null or a pointer returned by `list_option_build`.
-/// - This function must be called at most once for the same pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn list_option_free(options: *mut opendal::options::ListOptions) {
-    unsafe { free_options(options) }
-}
-
-/// Build delete options from raw C string key/value arrays.
-///
-/// On success, the returned pointer must be released by `delete_option_free`.
-/// # Safety
-///
-/// - When `len > 0`, `keys` and `values` must be non-null pointers to arrays
-///   containing at least `len` C-string pointers.
-/// - Each key/value entry must be a valid null-terminated UTF-8 string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn delete_option_build(
-    keys: *const *const c_char,
-    values: *const *const c_char,
-    len: usize,
-) -> OpendalOptionsResult {
-    unsafe { build_options(keys, values, len, |values| parse_delete_options(&values)) }
-}
-
-/// # Safety
-///
-/// - `options` must be null or a pointer returned by `delete_option_build`.
-/// - This function must be called at most once for the same pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn delete_option_free(options: *mut opendal::options::DeleteOptions) {
-    unsafe { free_options(options) }
-}
-
 /// Construct an OpenDAL operator instance from a scheme and key/value options.
 ///
 /// Returns a pointer that must be released with `operator_free`.
 /// # Safety
 ///
 /// - `scheme` must be a valid null-terminated UTF-8 string.
-/// - When `len > 0`, `keys` and `values` must be non-null and point to arrays
-///   of at least `len` entries.
-/// - Every key/value entry in those arrays must be a valid null-terminated
-///   UTF-8 string.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   string values.
 /// - `executor` must be either null or a live pointer returned by
 ///   `executor_create`. The operator binds it for its whole lifetime.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn operator_construct(
     scheme: *const c_char,
-    options: *const HashMap<String, String>,
+    options: *const c_char,
     executor: *const c_void,
 ) -> OpendalOperatorResult {
     match operator_construct_inner(scheme, options, executor) {
@@ -320,15 +125,11 @@ pub unsafe extern "C" fn operator_construct(
 
 fn operator_construct_inner(
     scheme: *const c_char,
-    options: *const HashMap<String, String>,
+    options: *const c_char,
     executor: *const c_void,
 ) -> Result<*mut c_void, OpenDALError> {
     let scheme = require_cstr(scheme, "scheme")?;
-    let options = if options.is_null() {
-        HashMap::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_string_map(options)?;
     // SAFETY: the caller keeps the executor handle alive across this call per
     // `operator_construct`'s contract; the clone owns the runtime afterwards.
     let executor = unsafe { executor_or_default(executor)? };
@@ -649,12 +450,13 @@ fn operator_duplicate_inner(op_handle: *const OperatorHandle) -> Result<*mut c_v
 ///
 /// - `op_handle` must be a valid operator pointer from `operator_construct`.
 /// - `path` must be a valid null-terminated UTF-8 string.
-/// - `options` must be null or a pointer returned by `delete_option_build`.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   delete options.
 #[unsafe(no_mangle)]
 pub extern "C" fn operator_delete_with_options(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::DeleteOptions,
+    options: *const c_char,
 ) -> OpendalResult {
     match operator_delete_with_options_inner(op_handle, path, options) {
         Ok(()) => OpendalResult::ok(),
@@ -665,17 +467,13 @@ pub extern "C" fn operator_delete_with_options(
 fn operator_delete_with_options_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::DeleteOptions,
+    options: *const c_char,
 ) -> Result<(), OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?;
 
-    let options = if options.is_null() {
-        opendal::options::DeleteOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<DeleteOptionsJson>(options)?;
 
     executor
         .block_on(handle.delete_options(path, options))
@@ -689,13 +487,14 @@ fn operator_delete_with_options_inner(
 ///
 /// - `op_handle` must be a valid operator pointer from `operator_construct`.
 /// - `path` must be a valid null-terminated UTF-8 string.
-/// - `options` must be null or a pointer returned by `delete_option_build`.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   delete options.
 /// - `callback` must be a valid function pointer and remain callable until invoked.
 #[unsafe(no_mangle)]
 pub extern "C" fn operator_delete_with_options_async(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::DeleteOptions,
+    options: *const c_char,
     callback: Option<VoidCallback>,
     context: i64,
 ) -> OpendalResult {
@@ -708,7 +507,7 @@ pub extern "C" fn operator_delete_with_options_async(
 fn operator_delete_with_options_async_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::DeleteOptions,
+    options: *const c_char,
     callback: Option<VoidCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -717,11 +516,7 @@ fn operator_delete_with_options_async_inner(
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
 
-    let options = if options.is_null() {
-        opendal::options::DeleteOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<DeleteOptionsJson>(options)?;
 
     let op = handle.operator();
     executor.spawn(async move {
@@ -822,7 +617,7 @@ fn operator_create_dir_async_inner(
     Ok(())
 }
 
-/// Copy from `source_path` to `target_path` synchronously.
+/// Copy from `source_path` to `target_path` synchronously with options.
 ///
 /// On success, the returned payload must be released with
 /// `opendal_metadata_result_release`.
@@ -830,35 +625,40 @@ fn operator_create_dir_async_inner(
 ///
 /// - `op_handle` must be a valid operator pointer from `operator_construct`.
 /// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   copy options.
 #[unsafe(no_mangle)]
-pub extern "C" fn operator_copy(
+pub extern "C" fn operator_copy_with_options(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
 ) -> OpendalMetadataResult {
-    match operator_copy_inner(op_handle, source_path, target_path) {
+    match operator_copy_with_options_inner(op_handle, source_path, target_path, options) {
         Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
         Err(error) => OpendalMetadataResult::from_error(error),
     }
 }
 
-fn operator_copy_inner(
+fn operator_copy_with_options_inner(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
 ) -> Result<*mut OpendalMetadata, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let source_path = require_cstr(source_path, "source_path")?;
     let target_path = require_cstr(target_path, "target_path")?;
+    let options = parse_options::<CopyOptionsJson>(options)?;
 
     let metadata = executor
-        .block_on(handle.copy(source_path, target_path))
+        .block_on(handle.copy_options(source_path, target_path, options))
         .map_err(OpenDALError::from_opendal_error)?;
     Ok(into_metadata_ptr(metadata))
 }
 
-/// Copy from `source_path` to `target_path` asynchronously.
+/// Copy from `source_path` to `target_path` asynchronously with options.
 ///
 /// The callback is invoked exactly once. On success, the callback result must
 /// be released with `opendal_metadata_result_release`.
@@ -866,25 +666,36 @@ fn operator_copy_inner(
 ///
 /// - `op_handle` must be a valid operator pointer from `operator_construct`.
 /// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   copy options.
 /// - `callback` must be a valid function pointer and remain callable until invoked.
 #[unsafe(no_mangle)]
-pub extern "C" fn operator_copy_async(
+pub extern "C" fn operator_copy_with_options_async(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> OpendalResult {
-    match operator_copy_async_inner(op_handle, source_path, target_path, callback, context) {
+    match operator_copy_with_options_async_inner(
+        op_handle,
+        source_path,
+        target_path,
+        options,
+        callback,
+        context,
+    ) {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
 }
 
-fn operator_copy_async_inner(
+fn operator_copy_with_options_async_inner(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -893,11 +704,12 @@ fn operator_copy_async_inner(
     let source_path = require_cstr(source_path, "source_path")?.to_string();
     let target_path = require_cstr(target_path, "target_path")?.to_string();
     let callback = require_callback(callback)?;
+    let options = parse_options::<CopyOptionsJson>(options)?;
 
     let op = handle.operator();
     executor.spawn(async move {
         let result = op
-            .copy(&source_path, &target_path)
+            .copy_options(&source_path, &target_path, options)
             .await
             .map(into_metadata_ptr)
             .map_err(OpenDALError::from_opendal_error);
@@ -914,64 +726,80 @@ fn operator_copy_async_inner(
     Ok(())
 }
 
-/// Rename from `source_path` to `target_path` synchronously.
+/// Rename from `source_path` to `target_path` synchronously with options.
 /// # Safety
 ///
 /// - `op_handle` must be a valid operator pointer from `operator_construct`.
 /// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   rename options.
 #[unsafe(no_mangle)]
-pub extern "C" fn operator_rename(
+pub extern "C" fn operator_rename_with_options(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
 ) -> OpendalResult {
-    match operator_rename_inner(op_handle, source_path, target_path) {
+    match operator_rename_with_options_inner(op_handle, source_path, target_path, options) {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
 }
 
-fn operator_rename_inner(
+fn operator_rename_with_options_inner(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
 ) -> Result<(), OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let source_path = require_cstr(source_path, "source_path")?;
     let target_path = require_cstr(target_path, "target_path")?;
+    let options = parse_options::<RenameOptionsJson>(options)?;
 
     executor
-        .block_on(handle.rename(source_path, target_path))
+        .block_on(handle.rename_options(source_path, target_path, options))
         .map_err(OpenDALError::from_opendal_error)
 }
 
-/// Rename from `source_path` to `target_path` asynchronously.
+/// Rename from `source_path` to `target_path` asynchronously with options.
 ///
 /// The callback is invoked exactly once with the final result.
 /// # Safety
 ///
 /// - `op_handle` must be a valid operator pointer from `operator_construct`.
 /// - `source_path` and `target_path` must be valid null-terminated UTF-8 strings.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   rename options.
 /// - `callback` must be a valid function pointer and remain callable until invoked.
 #[unsafe(no_mangle)]
-pub extern "C" fn operator_rename_async(
+pub extern "C" fn operator_rename_with_options_async(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
     callback: Option<VoidCallback>,
     context: i64,
 ) -> OpendalResult {
-    match operator_rename_async_inner(op_handle, source_path, target_path, callback, context) {
+    match operator_rename_with_options_async_inner(
+        op_handle,
+        source_path,
+        target_path,
+        options,
+        callback,
+        context,
+    ) {
         Ok(()) => OpendalResult::ok(),
         Err(error) => OpendalResult::from_error(error),
     }
 }
 
-fn operator_rename_async_inner(
+fn operator_rename_with_options_async_inner(
     op_handle: *const OperatorHandle,
     source_path: *const c_char,
     target_path: *const c_char,
+    options: *const c_char,
     callback: Option<VoidCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -980,11 +808,12 @@ fn operator_rename_async_inner(
     let source_path = require_cstr(source_path, "source_path")?.to_string();
     let target_path = require_cstr(target_path, "target_path")?.to_string();
     let callback = require_callback(callback)?;
+    let options = parse_options::<RenameOptionsJson>(options)?;
 
     let op = handle.operator();
     executor.spawn(async move {
         let result = op
-            .rename(&source_path, &target_path)
+            .rename_options(&source_path, &target_path, options)
             .await
             .map_err(OpenDALError::from_opendal_error);
 
@@ -1231,7 +1060,7 @@ fn operator_presign_delete_async_inner(
 pub extern "C" fn operator_input_stream_create(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ReadOptions,
+    options: *const c_char,
 ) -> OpendalOperatorResult {
     match operator_input_stream_create_inner(op_handle, path, options) {
         Ok(value) => OpendalOperatorResult::ok(value),
@@ -1285,22 +1114,20 @@ fn next_chunk_to_buffer(
 fn operator_input_stream_create_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ReadOptions,
+    options: *const c_char,
 ) -> Result<*mut c_void, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?.to_string();
-    let options = if options.is_null() {
-        opendal::options::ReadOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<ReadOptionsJson>(options)?;
 
     let range = options.range;
     let reader_options = opendal::options::ReaderOptions {
         version: options.version,
         if_match: options.if_match,
         if_none_match: options.if_none_match,
+        if_version_match: options.if_version_match,
+        if_version_not_match: options.if_version_not_match,
         if_modified_since: options.if_modified_since,
         if_unmodified_since: options.if_unmodified_since,
         content_length_hint: options.content_length_hint,
@@ -1422,7 +1249,7 @@ pub unsafe extern "C" fn operator_input_stream_free(stream: *mut c_void) {
 pub extern "C" fn operator_output_stream_create(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
 ) -> OpendalOperatorResult {
     match operator_output_stream_create_inner(op_handle, path, options) {
         Ok(value) => OpendalOperatorResult::ok(value),
@@ -1454,16 +1281,12 @@ fn require_output_stream<'a>(stream: *mut c_void) -> Result<&'a OutputStream, Op
 fn operator_output_stream_create_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
 ) -> Result<*mut c_void, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?.to_string();
-    let options = if options.is_null() {
-        opendal::options::WriteOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<WriteOptionsJson>(options)?;
 
     let writer_op = handle.operator();
     let writer = executor
@@ -1709,7 +1532,7 @@ pub unsafe extern "C" fn operator_write_with_options(
     path: *const c_char,
     buffer: *mut c_void,
     committed_in_current: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
 ) -> OpendalMetadataResult {
     match operator_write_with_options_inner(op_handle, path, buffer, committed_in_current, options)
     {
@@ -1723,7 +1546,7 @@ fn operator_write_with_options_inner(
     path: *const c_char,
     buffer: *mut c_void,
     committed_in_current: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
 ) -> Result<*mut OpendalMetadata, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
@@ -1733,11 +1556,7 @@ fn operator_write_with_options_inner(
             "write buffer handle is null",
         ));
     }
-    let options = if options.is_null() {
-        opendal::options::WriteOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<WriteOptionsJson>(options)?;
 
     // Taken only after every fallible check above, so an error result means
     // ownership never transferred and the buffer stays usable.
@@ -1770,7 +1589,7 @@ pub unsafe extern "C" fn operator_write_with_options_async(
     path: *const c_char,
     buffer: *mut c_void,
     committed_in_current: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> OpendalResult {
@@ -1797,7 +1616,7 @@ fn operator_write_with_options_async_inner(
     path: *const c_char,
     buffer: *mut c_void,
     committed_in_current: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -1810,11 +1629,7 @@ fn operator_write_with_options_async_inner(
             "write buffer handle is null",
         ));
     }
-    let options = if options.is_null() {
-        opendal::options::WriteOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<WriteOptionsJson>(options)?;
 
     // Taken only after every fallible check above, so an error result means
     // ownership never transferred and the buffer stays usable.
@@ -1857,7 +1672,7 @@ pub unsafe extern "C" fn operator_write_bytes_with_options(
     path: *const c_char,
     data: *const u8,
     len: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
 ) -> OpendalMetadataResult {
     match operator_write_bytes_with_options_inner(op_handle, path, data, len, options) {
         Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
@@ -1870,17 +1685,13 @@ fn operator_write_bytes_with_options_inner(
     path: *const c_char,
     data: *const u8,
     len: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
 ) -> Result<*mut OpendalMetadata, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?;
     require_data_ptr(data, len)?;
-    let options = if options.is_null() {
-        opendal::options::WriteOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<WriteOptionsJson>(options)?;
 
     // Copied explicitly: the only `Into<Buffer>` impl for slices is
     // `From<&'static [u8]>`, which is zero-copy, so passing the raw slice
@@ -1916,7 +1727,7 @@ pub unsafe extern "C" fn operator_write_bytes_with_options_async(
     path: *const c_char,
     data: *const u8,
     len: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> OpendalResult {
@@ -1937,7 +1748,7 @@ fn operator_write_bytes_with_options_async_inner(
     path: *const c_char,
     data: *const u8,
     len: usize,
-    options: *const opendal::options::WriteOptions,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -1946,11 +1757,7 @@ fn operator_write_bytes_with_options_async_inner(
     let path = require_cstr(path, "path")?.to_string();
     require_data_ptr(data, len)?;
     let callback = require_callback(callback)?;
-    let options = if options.is_null() {
-        opendal::options::WriteOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<WriteOptionsJson>(options)?;
 
     // Copied before the task is spawned, so the caller only has to keep its
     // array alive for the duration of this call.
@@ -1992,7 +1799,7 @@ fn operator_write_bytes_with_options_async_inner(
 pub unsafe extern "C" fn operator_read_with_options(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ReadOptions,
+    options: *const c_char,
 ) -> OpendalReadResult {
     match operator_read_with_options_inner(op_handle, path, options) {
         Ok(value) => OpendalReadResult::ok(value),
@@ -2003,16 +1810,12 @@ pub unsafe extern "C" fn operator_read_with_options(
 fn operator_read_with_options_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ReadOptions,
+    options: *const c_char,
 ) -> Result<OpendalReadBuffer, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?;
-    let options = if options.is_null() {
-        opendal::options::ReadOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<ReadOptionsJson>(options)?;
 
     let value = executor
         .block_on(handle.read_options(path, options))
@@ -2035,7 +1838,7 @@ fn operator_read_with_options_inner(
 pub extern "C" fn operator_read_with_options_async(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ReadOptions,
+    options: *const c_char,
     callback: Option<ReadCallback>,
     context: i64,
 ) -> OpendalResult {
@@ -2048,7 +1851,7 @@ pub extern "C" fn operator_read_with_options_async(
 fn operator_read_with_options_async_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ReadOptions,
+    options: *const c_char,
     callback: Option<ReadCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -2056,11 +1859,7 @@ fn operator_read_with_options_async_inner(
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
-    let options = if options.is_null() {
-        opendal::options::ReadOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<ReadOptionsJson>(options)?;
 
     let op = handle.operator();
     executor.spawn(async move {
@@ -2094,7 +1893,7 @@ fn operator_read_with_options_async_inner(
 pub extern "C" fn operator_stat_with_options(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::StatOptions,
+    options: *const c_char,
 ) -> OpendalMetadataResult {
     match operator_stat_with_options_inner(op_handle, path, options) {
         Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
@@ -2105,16 +1904,12 @@ pub extern "C" fn operator_stat_with_options(
 fn operator_stat_with_options_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::StatOptions,
+    options: *const c_char,
 ) -> Result<*mut OpendalMetadata, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?;
-    let options = if options.is_null() {
-        opendal::options::StatOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<StatOptionsJson>(options)?;
 
     let metadata = executor
         .block_on(handle.stat_options(path, options))
@@ -2136,7 +1931,7 @@ fn operator_stat_with_options_inner(
 pub extern "C" fn operator_stat_with_options_async(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::StatOptions,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> OpendalResult {
@@ -2149,7 +1944,7 @@ pub extern "C" fn operator_stat_with_options_async(
 fn operator_stat_with_options_async_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::StatOptions,
+    options: *const c_char,
     callback: Option<MetadataCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -2157,11 +1952,7 @@ fn operator_stat_with_options_async_inner(
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
-    let options = if options.is_null() {
-        opendal::options::StatOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<StatOptionsJson>(options)?;
 
     let op = handle.operator();
     executor.spawn(async move {
@@ -2340,7 +2131,7 @@ fn operator_check_async_inner(
 pub extern "C" fn operator_list_with_options(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ListOptions,
+    options: *const c_char,
 ) -> OpendalEntryListResult {
     match operator_list_with_options_inner(op_handle, path, options) {
         Ok(value) => OpendalEntryListResult::ok(value),
@@ -2351,16 +2142,12 @@ pub extern "C" fn operator_list_with_options(
 fn operator_list_with_options_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ListOptions,
+    options: *const c_char,
 ) -> Result<*mut c_void, OpenDALError> {
     let handle = require_op_handle(op_handle)?;
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?;
-    let options = if options.is_null() {
-        opendal::options::ListOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<ListOptionsJson>(options)?;
 
     let entries = executor
         .block_on(handle.list_options(path, options))
@@ -2383,7 +2170,7 @@ fn operator_list_with_options_inner(
 pub extern "C" fn operator_list_with_options_async(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ListOptions,
+    options: *const c_char,
     callback: Option<ListCallback>,
     context: i64,
 ) -> OpendalResult {
@@ -2396,7 +2183,7 @@ pub extern "C" fn operator_list_with_options_async(
 fn operator_list_with_options_async_inner(
     op_handle: *const OperatorHandle,
     path: *const c_char,
-    options: *const opendal::options::ListOptions,
+    options: *const c_char,
     callback: Option<ListCallback>,
     context: i64,
 ) -> Result<(), OpenDALError> {
@@ -2404,11 +2191,7 @@ fn operator_list_with_options_async_inner(
     let executor = handle.executor.clone();
     let path = require_cstr(path, "path")?.to_string();
     let callback = require_callback(callback)?;
-    let options = if options.is_null() {
-        opendal::options::ListOptions::default()
-    } else {
-        unsafe { (&*options).clone() }
-    };
+    let options = parse_options::<ListOptionsJson>(options)?;
 
     let op = handle.operator();
     executor.spawn(async move {

@@ -31,6 +31,12 @@
 //! The typed `*ServiceConfig` classes mirror each service's config struct and
 //! are rendered from the same parsed service definitions the Java and Python
 //! generators consume.
+//!
+//! The operation options cross the FFI boundary as one JSON object per call,
+//! which native code deserializes into a mirror struct and converts into the
+//! core options struct. The public C# classes, their JSON writers, and the
+//! Rust mirrors are all rendered from `core/core/src/types/options.rs`, so a
+//! new core option only needs a regeneration.
 
 use anyhow::{Result, bail};
 use minijinja::{Environment, context};
@@ -39,6 +45,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::capability;
+use super::core_options::{self, OptionField, OptionKind, OptionsStruct};
 use super::metadata::{self, MetadataKind};
 use super::parser::{Config, ConfigType, Services, sorted_services};
 
@@ -87,6 +94,14 @@ struct MetadataField {
     cs_type: String,
     /// Expression that reads the public value from the interop struct's fields.
     cs_read: String,
+    /// Field declaration in the Rust JSON mirror that carries metadata back
+    /// to native code.
+    json_rs_field: String,
+    /// Statement that applies the JSON mirror field to a `MetadataBuilder`,
+    /// empty for the members the builder is constructed from.
+    json_rs_apply: String,
+    /// C# statement that writes the property as a JSON member.
+    json_cs_write: String,
 }
 
 /// One field of the mirrors. An accessor with an optional or composite
@@ -123,9 +138,59 @@ struct ConfigField {
     doc: String,
 }
 
+/// Render model for one public `*Options` class and its native parser.
+#[derive(Serialize)]
+struct OptionsClass {
+    /// The class name, identical to the core struct name, e.g. `ReadOptions`.
+    name: String,
+    /// snake_case operation used in native validation messages, e.g. `read`.
+    operation: String,
+    /// Class summary, already rendered as C# XML doc text.
+    summary: String,
+    /// The public properties in core field order.
+    properties: Vec<OptionProperty>,
+    /// C# statements that validate the properties before crossing the FFI.
+    validations: Vec<String>,
+    /// `NativeOptionsBuilder` calls that add the properties as JSON members.
+    json_writes: Vec<String>,
+    /// Field declarations of the Rust JSON mirror struct.
+    rs_fields: Vec<String>,
+    /// Rust statements that convert the mirror into core options.
+    rs_convert: Vec<String>,
+}
+
+/// One public property of an `*Options` class. A core field usually maps to
+/// one property; a `BytesRange` flattens into several.
+#[derive(Serialize)]
+struct OptionProperty {
+    /// PascalCase property name.
+    pascal: String,
+    /// The C# property type.
+    cs_type: String,
+    /// Property initializer including the leading ` = `, empty when none.
+    initializer: String,
+    /// Property summary, already rendered as C# XML doc text.
+    summary: String,
+    /// `cref` targets of the capabilities the core doc refers to.
+    see_also: Vec<String>,
+}
+
+/// The core option structs the binding exposes, with the snake_case
+/// operation their native validation messages name.
+const EXPOSED_OPTIONS: &[(&str, &str)] = &[
+    ("ReadOptions", "read"),
+    ("WriteOptions", "write"),
+    ("StatOptions", "stat"),
+    ("ListOptions", "list"),
+    ("DeleteOptions", "delete"),
+    ("CopyOptions", "copy"),
+    ("RenameOptions", "rename"),
+];
+
 pub fn generate(workspace_dir: PathBuf, services: Services) -> Result<()> {
     generate_capability(&workspace_dir)?;
     generate_metadata(&workspace_dir)?;
+    generate_options(&workspace_dir)?;
     generate_service_configs(&workspace_dir, services)
 }
 
@@ -173,6 +238,7 @@ fn generate_metadata(workspace_dir: &Path) -> Result<()> {
         .into_iter()
         .map(metadata_field)
         .collect();
+    validate_metadata_rebuild(&fields, &metadata::parse_builder_setters(&source)?)?;
 
     let mut env = Environment::new();
     env.add_template("metadata_rs", include_str!("dotnet/metadata_rs.j2"))?;
@@ -197,6 +263,43 @@ fn generate_metadata(workspace_dir: &Path) -> Result<()> {
         let tmpl = env.get_template(template)?;
         let rendered = tmpl.render(context! { fields => fields })?;
         write_rendered(&workspace_dir.join(relative), rendered)?;
+    }
+
+    Ok(())
+}
+
+/// Check that the JSON mirror can rebuild every metadata accessor.
+///
+/// Each accessor needs a `MetadataBuilder` setter of the same name, except
+/// `mode` and `content_length`, which the template passes to
+/// `MetadataBuilder::file`. Anything else fails loudly, so a new accessor
+/// upstream is never silently dropped on the way back to native code.
+fn validate_metadata_rebuild(fields: &[MetadataField], setters: &[String]) -> Result<()> {
+    for required in ["mode", "content_length"] {
+        if !fields.iter().any(|f| f.name == required) {
+            bail!(
+                "metadata accessor `{required}` is gone; \
+                 update the builder construction in dotnet/metadata_rs.j2"
+            );
+        }
+    }
+
+    for f in fields {
+        if f.json_rs_apply.is_empty() {
+            if !matches!(f.name.as_str(), "mode" | "content_length") {
+                bail!(
+                    "metadata accessor `{}` is not rebuilt; \
+                     teach dev/src/generate/dotnet.rs how to apply it",
+                    f.name
+                );
+            }
+        } else if !setters.contains(&f.name) {
+            bail!(
+                "metadata accessor `{}` has no `MetadataBuilder` setter of the same name; \
+                 teach dev/src/generate/dotnet.rs how to rebuild it",
+                f.name
+            );
+        }
     }
 
     Ok(())
@@ -297,6 +400,61 @@ fn metadata_field(f: metadata::MetadataField) -> MetadataField {
         ),
     };
 
+    // Metadata travels back to native code as JSON, for options such as
+    // `if_not_changed`. `mode` and `content_length` have no setter of their
+    // own: the template rebuilds them through `MetadataBuilder::file`.
+    let (json_rs_field, json_rs_apply, json_cs_write) = match f.kind {
+        MetadataKind::Mode => (
+            format!("{name}: Option<i32>,"),
+            String::new(),
+            format!("writer.WriteNumber(\"{name}\", (int){pascal});"),
+        ),
+        MetadataKind::U64 => (
+            format!("{name}: u64,"),
+            String::new(),
+            format!("writer.WriteNumber(\"{name}\", {pascal});"),
+        ),
+        MetadataKind::Bool => (
+            format!("{name}: bool,"),
+            format!("builder.{name}(self.{name});"),
+            format!("writer.WriteBoolean(\"{name}\", {pascal});"),
+        ),
+        MetadataKind::OptionBool => (
+            format!("{name}: Option<bool>,"),
+            format!("builder.{name}(self.{name});"),
+            format!(
+                "if ({pascal} is {{ }} {camel})\n        {{\n            writer.WriteBoolean(\"{name}\", {camel});\n        }}"
+            ),
+        ),
+        MetadataKind::OptionStr => (
+            format!("{name}: Option<String>,"),
+            format!(
+                "if let Some(value) = self.{name} {{\n            builder.{name}(value);\n        }}"
+            ),
+            format!(
+                "if ({pascal} is not null)\n        {{\n            writer.WriteString(\"{name}\", {pascal});\n        }}"
+            ),
+        ),
+        MetadataKind::OptionTimestamp => (
+            format!("{name}: Option<TimestampJson>,"),
+            format!(
+                "if let Some(value) = self.{name} {{\n            builder.{name}(value.into_timestamp()?);\n        }}"
+            ),
+            format!(
+                "if ({pascal} is {{ }} {camel})\n        {{\n            var ({camel}Second, {camel}Nanosecond) = Utilities.ToUnixSecondAndNanosecond({camel});\n            writer.WriteStartObject(\"{name}\");\n            writer.WriteNumber(\"second\", {camel}Second);\n            writer.WriteNumber(\"nanosecond\", {camel}Nanosecond);\n            writer.WriteEndObject();\n        }}"
+            ),
+        ),
+        MetadataKind::OptionUserMetadata => (
+            format!("{name}: Option<HashMap<String, String>>,"),
+            format!(
+                "if let Some(values) = self.{name} {{\n            builder.{name}(values);\n        }}"
+            ),
+            format!(
+                "if ({pascal} is not null)\n        {{\n            writer.WriteStartObject(\"{name}\");\n            foreach (var entry in {pascal})\n            {{\n                writer.WriteString(entry.Key, entry.Value);\n            }}\n\n            writer.WriteEndObject();\n        }}"
+            ),
+        ),
+    };
+
     let rs_bind = match parts.as_slice() {
         [only] => only.name.clone(),
         many => {
@@ -314,11 +472,374 @@ fn metadata_field(f: metadata::MetadataField) -> MetadataField {
         rs_release,
         cs_type: cs_type.to_string(),
         cs_read,
+        json_rs_field,
+        json_rs_apply,
+        json_cs_write,
         pascal,
         camel,
         doc: f.doc,
         name: f.name,
     }
+}
+
+fn generate_options(workspace_dir: &Path) -> Result<()> {
+    let source = workspace_dir.join("core/core/src/types/options.rs");
+    let structs = core_options::parse(&source)?;
+
+    let mut classes = Vec::with_capacity(EXPOSED_OPTIONS.len());
+    for (name, operation) in EXPOSED_OPTIONS {
+        let Some(options) = structs.iter().find(|s| s.name == *name) else {
+            bail!("options struct {name} not found in {}", source.display());
+        };
+        classes.push(options_class(options, operation));
+    }
+
+    let mut env = Environment::new();
+    env.add_template("options_rs", include_str!("dotnet/options_rs.j2"))?;
+    env.add_template("options_cs", include_str!("dotnet/options_cs.j2"))?;
+
+    let rendered = env
+        .get_template("options_rs")?
+        .render(context! { classes => classes })?;
+    write_rendered(
+        &workspace_dir.join("bindings/dotnet/src/options.rs"),
+        rendered,
+    )?;
+
+    let tmpl = env.get_template("options_cs")?;
+    for class in &classes {
+        let rendered = tmpl.render(context! { class => class })?;
+        let output =
+            workspace_dir.join(format!("bindings/dotnet/OpenDAL/Options/{}.cs", class.name));
+        write_rendered(&output, rendered)?;
+    }
+
+    Ok(())
+}
+
+/// Precompute every per-kind decision for one options struct.
+///
+/// This table is the only place that knows how an option shape crosses the
+/// FFI boundary: the C# properties it surfaces as, how C# validates and
+/// writes them as JSON members, and how the Rust mirror declares and converts
+/// them. A new shape needs one arm here; fields that reuse a known shape need
+/// nothing.
+///
+/// Counts (`usize` and `Option<usize>`) must be positive, matching every
+/// count core exposes today.
+fn options_class(options: &OptionsStruct, operation: &str) -> OptionsClass {
+    let ctx = DocContext {
+        fields: &options.fields,
+    };
+
+    let mut properties = Vec::new();
+    let mut validations = Vec::new();
+    let mut json_writes = Vec::new();
+    let mut rs_fields = Vec::new();
+    let mut rs_convert = Vec::new();
+
+    for f in &options.fields {
+        let key = f.name.as_str();
+        let pascal = heck::AsUpperCamelCase(key).to_string();
+        let property = |cs_type: &str, initializer: &str| OptionProperty {
+            pascal: pascal.clone(),
+            cs_type: cs_type.to_string(),
+            initializer: initializer.to_string(),
+            summary: ctx.summary(&f.doc),
+            see_also: capability_refs(&f.doc),
+        };
+
+        match f.kind {
+            OptionKind::Bool => {
+                properties.push(property("bool", ""));
+                json_writes.push(format!(
+                    ".AddBoolTrue(\"{key}\", {pascal})"
+                ));
+                rs_fields.push(format!("{key}: bool,"));
+                rs_convert.push(format!("options.{key} = self.{key};"));
+            }
+            OptionKind::Usize => {
+                properties.push(property("int", " = 1;"));
+                validations.push(format!(
+                    "OptionValidators.RequireGreaterThanZero({pascal}, nameof({pascal}));"
+                ));
+                json_writes.push(format!(
+                    ".AddInt32IfNotDefault(\"{key}\", {pascal}, 1)"
+                ));
+                rs_fields.push(format!("{key}: Option<usize>,"));
+                rs_convert.push(format!(
+                    "if let Some(value) = self.{key} {{\n            validate_positive_integer(value, \"{operation} {key}\")?;\n            options.{key} = value;\n        }}"
+                ));
+            }
+            OptionKind::OptionUsize => {
+                properties.push(property("long?", ""));
+                validations.push(format!(
+                    "OptionValidators.RequireNullableGreaterThanZero({pascal}, nameof({pascal}));"
+                ));
+                json_writes.push(format!(
+                    ".AddNullableInt64(\"{key}\", {pascal})"
+                ));
+                rs_fields.push(format!("{key}: Option<usize>,"));
+                rs_convert.push(format!(
+                    "if let Some(value) = self.{key} {{\n            validate_positive_integer(value, \"{operation} {key}\")?;\n            options.{key} = Some(value);\n        }}"
+                ));
+            }
+            OptionKind::OptionU64 => {
+                properties.push(property("long?", ""));
+                validations.push(format!(
+                    "OptionValidators.RequireNullableGreaterThanOrEqualZero({pascal}, nameof({pascal}));"
+                ));
+                json_writes.push(format!(
+                    ".AddNullableInt64(\"{key}\", {pascal})"
+                ));
+                rs_fields.push(format!("{key}: Option<u64>,"));
+                rs_convert.push(format!("options.{key} = self.{key};"));
+            }
+            OptionKind::OptionString => {
+                properties.push(property("string?", ""));
+                json_writes.push(format!(
+                    ".AddString(\"{key}\", {pascal})"
+                ));
+                rs_fields.push(format!("{key}: Option<String>,"));
+                rs_convert.push(format!("options.{key} = self.{key};"));
+            }
+            OptionKind::OptionTimestamp => {
+                properties.push(property("DateTimeOffset?", ""));
+                json_writes.push(format!(
+                    ".AddUnixTimeMilliseconds(\"{key}\", {pascal})"
+                ));
+                rs_fields.push(format!("{key}: Option<i64>,"));
+                rs_convert.push(format!(
+                    "options.{key} = self.{key}.map(timestamp).transpose()?;"
+                ));
+            }
+            OptionKind::OptionStringMap => {
+                properties.push(property("IReadOnlyDictionary<string, string>?", ""));
+                json_writes.push(format!(
+                    ".AddStringMap(\"{key}\", {pascal})"
+                ));
+                rs_fields.push(format!("{key}: Option<HashMap<String, String>>,"));
+                rs_convert.push(format!("options.{key} = self.{key};"));
+            }
+            OptionKind::OptionMetadata => {
+                properties.push(property("Metadata?", ""));
+                json_writes.push(format!(
+                    ".AddMetadata(\"{key}\", {pascal})"
+                ));
+                rs_fields.push(format!("{key}: Option<MetadataJson>,"));
+                rs_convert.push(format!(
+                    "options.{key} = self.{key}.map(MetadataJson::into_metadata).transpose()?;"
+                ));
+            }
+            OptionKind::BytesRange => {
+                // The established surface spells a range as an offset and an
+                // optional length; a suffix range is a third, exclusive form.
+                let range = |pascal: &str, cs_type: &str, summary: &str, see_also: &[&str]| {
+                    OptionProperty {
+                        pascal: pascal.to_string(),
+                        cs_type: cs_type.to_string(),
+                        initializer: String::new(),
+                        summary: summary.to_string(),
+                        see_also: see_also.iter().map(|s| s.to_string()).collect(),
+                    }
+                };
+                properties.push(range(
+                    "Offset",
+                    "long",
+                    "The byte offset to start reading from.",
+                    &[],
+                ));
+                properties.push(range(
+                    "Length",
+                    "long?",
+                    "The number of bytes to read from <see cref=\"Offset\"/>, or <see langword=\"null\"/> to read to the end.",
+                    &[],
+                ));
+                properties.push(range(
+                    "SuffixLength",
+                    "long?",
+                    "Read the last <see cref=\"SuffixLength\"/> bytes instead of a range from <see cref=\"Offset\"/>. It cannot be combined with <see cref=\"Offset\"/> or <see cref=\"Length\"/>.",
+                    &["Capability.ReadWithSuffix"],
+                ));
+                validations.extend([
+                    "OptionValidators.RequireGreaterThanOrEqualZero(Offset, nameof(Offset));"
+                        .to_string(),
+                    "OptionValidators.RequireNullableGreaterThanOrEqualZero(Length, nameof(Length));"
+                        .to_string(),
+                    "OptionValidators.RequireNullableGreaterThanOrEqualZero(SuffixLength, nameof(SuffixLength));"
+                        .to_string(),
+                    "OptionValidators.RequireSuffixExclusive(Offset, Length, SuffixLength);"
+                        .to_string(),
+                ]);
+                json_writes.extend([
+                    ".AddInt64IfNotDefault(\"offset\", Offset, 0)"
+                        .to_string(),
+                    ".AddNullableInt64(\"length\", Length)".to_string(),
+                    ".AddNullableInt64(\"suffix_length\", SuffixLength)"
+                        .to_string(),
+                ]);
+                rs_fields.extend([
+                    "offset: Option<u64>,".to_string(),
+                    "length: Option<u64>,".to_string(),
+                    "suffix_length: Option<u64>,".to_string(),
+                ]);
+                rs_convert.push(format!(
+                    "options.{key} = range(self.offset, self.length, self.suffix_length)?;"
+                ));
+            }
+        }
+    }
+
+    let summary = match ctx.summary(&options.doc) {
+        s if s.is_empty() => format!("Options for {operation} operations."),
+        s => s,
+    };
+
+    OptionsClass {
+        name: options.name.clone(),
+        operation: operation.to_string(),
+        summary,
+        properties,
+        validations,
+        json_writes,
+        rs_fields,
+        rs_convert,
+    }
+}
+
+/// Renders rustdoc of one options struct as C# XML doc text.
+struct DocContext<'a> {
+    /// Fields of the struct, so code spans naming them become `cref`s.
+    fields: &'a [OptionField],
+}
+
+impl DocContext<'_> {
+    /// The first paragraph of a rustdoc comment as a single line of C# XML
+    /// doc text.
+    fn summary(&self, lines: &[String]) -> String {
+        let paragraph = lines
+            .iter()
+            .map(|line| line.trim())
+            .take_while(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        self.inline(&paragraph)
+    }
+
+    /// Translate inline rustdoc markup: intra-doc links, Markdown links, and
+    /// code spans. Everything else is XML-escaped text.
+    fn inline(&self, text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text;
+        while let Some(pos) = rest.find(['[', '`']) {
+            out.push_str(&xml_escape(&rest[..pos]));
+            rest = &rest[pos..];
+
+            if let Some(code) = rest.strip_prefix('`') {
+                match code.find('`') {
+                    Some(end) => {
+                        out.push_str(&self.code(&code[..end]));
+                        rest = &code[end + 1..];
+                    }
+                    None => {
+                        out.push('`');
+                        rest = code;
+                    }
+                }
+                continue;
+            }
+
+            let Some(close) = rest.find(']') else {
+                out.push('[');
+                rest = &rest[1..];
+                continue;
+            };
+            let label = &rest[1..close];
+            let after = &rest[close + 1..];
+            if let Some(target) = after.strip_prefix('(')
+                && let Some(end) = target.find(')')
+            {
+                out.push_str(&format!(
+                    "<see href=\"{}\">{}</see>",
+                    xml_escape(&target[..end]),
+                    self.inline(label)
+                ));
+                rest = &target[end + 1..];
+            } else if let Some(target) = after.strip_prefix('[')
+                && let Some(end) = target.find(']')
+            {
+                // A reference link points into the Rust docs; keep its text.
+                out.push_str(&self.inline(label));
+                rest = &target[end + 1..];
+            } else if let Some(path) = label.strip_prefix('`').and_then(|l| l.strip_suffix('`')) {
+                out.push_str(&self.path(path));
+                rest = after;
+            } else {
+                out.push_str(&self.inline(label));
+                rest = after;
+            }
+        }
+        out.push_str(&xml_escape(rest));
+        out
+    }
+
+    /// An intra-doc link target, e.g. `crate::Capability::read_with_version`.
+    fn path(&self, path: &str) -> String {
+        let path = path.strip_prefix("crate::").unwrap_or(path);
+        let segments: Vec<&str> = path.split("::").collect();
+        match segments.as_slice() {
+            ["Capability", field] => format!(
+                "<see cref=\"Capability.{}\"/>",
+                heck::AsUpperCamelCase(field)
+            ),
+            ["ErrorKind", variant] => format!("<see cref=\"ErrorCode.{variant}\"/>"),
+            ["Self", field] => self.code(field),
+            [ty] if EXPOSED_OPTIONS.iter().any(|(name, _)| name == ty) => {
+                format!("<see cref=\"{ty}\"/>")
+            }
+            [ty, field] if EXPOSED_OPTIONS.iter().any(|(name, _)| name == ty) => {
+                format!("<see cref=\"{ty}.{}\"/>", heck::AsUpperCamelCase(field))
+            }
+            _ => format!("<c>{}</c>", xml_escape(path)),
+        }
+    }
+
+    /// A code span: a sibling field becomes a `cref` to its property.
+    fn code(&self, code: &str) -> String {
+        if self
+            .fields
+            .iter()
+            .any(|f| f.name == code && f.kind != OptionKind::BytesRange)
+        {
+            format!("<see cref=\"{}\"/>", heck::AsUpperCamelCase(code))
+        } else if matches!(code, "true" | "false") {
+            format!("<see langword=\"{code}\"/>")
+        } else {
+            format!("<c>{}</c>", xml_escape(code))
+        }
+    }
+}
+
+/// The `cref` targets of every `Capability` field a rustdoc comment links to,
+/// in order of first mention.
+fn capability_refs(lines: &[String]) -> Vec<String> {
+    const MARKER: &str = "crate::Capability::";
+
+    let mut refs = Vec::new();
+    for line in lines {
+        let mut rest = line.as_str();
+        while let Some(pos) = rest.find(MARKER) {
+            rest = &rest[pos + MARKER.len()..];
+            let end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .unwrap_or(rest.len());
+            let cref = format!("Capability.{}", heck::AsUpperCamelCase(&rest[..end]));
+            if !refs.contains(&cref) {
+                refs.push(cref);
+            }
+        }
+    }
+    refs
 }
 
 fn enabled_service(srv: &str) -> bool {
@@ -479,4 +1000,80 @@ fn write_rendered(output: &std::path::Path, mut rendered: String) -> Result<()> 
     }
     fs::write(output, rendered)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_options_doc_inline() {
+        let fields = [OptionField {
+            name: "if_match".to_string(),
+            kind: OptionKind::OptionString,
+            doc: vec![],
+        }];
+        let ctx = DocContext { fields: &fields };
+
+        assert_eq!(
+            ctx.inline("Check [`crate::Capability::read_with_if_match`] first."),
+            "Check <see cref=\"Capability.ReadWithIfMatch\"/> first."
+        );
+        assert_eq!(
+            ctx.inline("Fails with [`crate::ErrorKind::ConditionNotMatch`]."),
+            "Fails with <see cref=\"ErrorCode.ConditionNotMatch\"/>."
+        );
+        assert_eq!(
+            ctx.inline("Conflicts with `if_match`, default `false`, see `a<b`."),
+            "Conflicts with <see cref=\"IfMatch\"/>, default <see langword=\"false\"/>, see <c>a&lt;b</c>."
+        );
+        assert_eq!(
+            ctx.inline("See [the spec][crate::docs::specs::x] and [`crate::Reader::fetch`]."),
+            "See the spec and <c>Reader::fetch</c>."
+        );
+        assert_eq!(
+            ctx.inline("Read [MDN](https://example.com/a?b&c)."),
+            "Read <see href=\"https://example.com/a?b&amp;c\">MDN</see>."
+        );
+    }
+
+    #[test]
+    fn test_metadata_rebuild_requires_a_setter() {
+        let field = |name: &str, kind| {
+            metadata_field(metadata::MetadataField {
+                name: name.to_string(),
+                kind,
+                doc: String::new(),
+            })
+        };
+        let fields = vec![
+            field("mode", MetadataKind::Mode),
+            field("content_length", MetadataKind::U64),
+            field("etag", MetadataKind::OptionStr),
+        ];
+        let setters = vec!["etag".to_string()];
+        assert!(validate_metadata_rebuild(&fields, &setters).is_ok());
+
+        let mut with_new_accessor = fields;
+        with_new_accessor.push(field("storage_class", MetadataKind::OptionStr));
+        let err = validate_metadata_rebuild(&with_new_accessor, &setters)
+            .expect_err("an accessor without a setter must fail");
+        assert!(err.to_string().contains("storage_class"));
+
+        let without_mode = vec![field("etag", MetadataKind::OptionStr)];
+        assert!(validate_metadata_rebuild(&without_mode, &setters).is_err());
+    }
+
+    #[test]
+    fn test_capability_refs() {
+        let lines = vec![
+            "Check [`crate::Capability::copy_can_multi`] and".to_string(),
+            "[`crate::Capability::copy_multi_min_size`]; see `copy_can_multi`".to_string(),
+            "again: [`crate::Capability::copy_can_multi`].".to_string(),
+        ];
+        assert_eq!(
+            capability_refs(&lines),
+            ["Capability.CopyCanMulti", "Capability.CopyMultiMinSize"]
+        );
+    }
 }

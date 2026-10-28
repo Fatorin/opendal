@@ -17,34 +17,37 @@
  * under the License.
  */
 
-using OpenDAL.Interop.Result;
+
+using System.Buffers;
+using System.Text.Json;
+using OpenDAL.Options.Abstractions;
 
 namespace OpenDAL.Options;
 
 /// <summary>
-/// Delegate that builds a native options payload from managed key/value arrays.
+/// Builds options as the JSON object that native entry points decode.
 /// </summary>
-/// <param name="keys">Option keys.</param>
-/// <param name="values">Option values aligned by index with <paramref name="keys"/>.</param>
-/// <param name="len">Number of key/value pairs.</param>
-/// <returns>Native options build result.</returns>
-internal delegate OpenDALOptionsResult NativeBuildOptionsDelegate(string[] keys, string[] values, nuint len);
-
-/// <summary>
-/// Builder that incrementally collects native key/value options.
-/// </summary>
-internal sealed class NativeOptionsBuilder
+/// <remarks>
+/// Native code rejects unknown members, so every key added here must match
+/// the native mirror generated from the core options struct.
+/// </remarks>
+internal readonly struct NativeOptionsBuilder
 {
-    private readonly Dictionary<string, string> options = new();
+    private readonly Utf8JsonWriter writer;
+
+    private NativeOptionsBuilder(Utf8JsonWriter writer)
+    {
+        this.writer = writer;
+    }
 
     /// <summary>
-    /// Adds the option with value "true" when <paramref name="value"/> is true.
+    /// Adds the option as <see langword="true"/> when <paramref name="value"/> is true.
     /// </summary>
     public NativeOptionsBuilder AddBoolTrue(string key, bool value)
     {
         if (value)
         {
-            options[key] = "true";
+            writer.WriteBoolean(key, true);
         }
 
         return this;
@@ -57,7 +60,7 @@ internal sealed class NativeOptionsBuilder
     {
         if (!string.IsNullOrEmpty(value))
         {
-            options[key] = value;
+            writer.WriteString(key, value);
         }
 
         return this;
@@ -70,7 +73,7 @@ internal sealed class NativeOptionsBuilder
     {
         if (value != defaultValue)
         {
-            options[key] = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            writer.WriteNumber(key, value);
         }
 
         return this;
@@ -83,7 +86,7 @@ internal sealed class NativeOptionsBuilder
     {
         if (value != defaultValue)
         {
-            options[key] = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            writer.WriteNumber(key, value);
         }
 
         return this;
@@ -96,7 +99,7 @@ internal sealed class NativeOptionsBuilder
     {
         if (value is not null)
         {
-            options[key] = value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            writer.WriteNumber(key, value.Value);
         }
 
         return this;
@@ -109,67 +112,170 @@ internal sealed class NativeOptionsBuilder
     {
         if (value is not null)
         {
-            options[key] = value.Value.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            writer.WriteNumber(key, value.Value.ToUnixTimeMilliseconds());
         }
 
         return this;
     }
 
     /// <summary>
-    /// Adds prefixed entries from the provided dictionary.
+    /// Adds the entries as a nested object when the map is provided.
     /// </summary>
-    public NativeOptionsBuilder AddPrefixedEntries(string prefix, IReadOnlyDictionary<string, string>? values)
+    public NativeOptionsBuilder AddStringMap(string key, IReadOnlyDictionary<string, string>? values)
     {
         if (values is null)
         {
             return this;
         }
 
+        writer.WriteStartObject(key);
         foreach (var entry in values)
         {
-            options[$"{prefix}{entry.Key}"] = entry.Value;
+            writer.WriteString(entry.Key, entry.Value);
         }
 
+        writer.WriteEndObject();
         return this;
     }
 
     /// <summary>
-    /// Builds the final native options dictionary.
+    /// Adds the metadata as a nested object when it is provided.
     /// </summary>
-    public IReadOnlyDictionary<string, string> Build()
+    /// <remarks>
+    /// Every member of the metadata is written, so native code rebuilds the
+    /// same metadata core compares against without the binding tracking which
+    /// members a condition such as <c>if_not_changed</c> reads.
+    /// </remarks>
+    public NativeOptionsBuilder AddMetadata(string key, Metadata? value)
     {
-        return options;
+        if (value is null)
+        {
+            return this;
+        }
+
+        writer.WritePropertyName(key);
+        value.WriteJson(writer);
+        return this;
     }
 
     /// <summary>
-    /// Builds a native options handle from managed key/value options.
+    /// Serializes options as a null-terminated UTF-8 JSON object, or returns
+    /// <see langword="null"/> for defaults.
     /// </summary>
-    /// <param name="options">Managed options dictionary.</param>
-    /// <param name="build">Native build function used to allocate and populate options payload.</param>
-    /// <param name="release">Native release function used by the resulting handle.</param>
-    /// <returns>A safe handle that owns the native options payload.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
-    /// <exception cref="OpenDALException">Native options build fails.</exception>
-    public static NativeOptionsHandle BuildNativeOptionsHandle(
-        IReadOnlyDictionary<string, string> options,
-        NativeBuildOptionsDelegate build,
-        Action<IntPtr> release)
+    public static byte[]? Serialize(IOptions? options)
     {
-        ArgumentNullException.ThrowIfNull(options);
-
-        var keys = new string[options.Count];
-        var values = new string[options.Count];
-        var index = 0;
-
-        foreach (var option in options)
+        if (options is null)
         {
-            keys[index] = option.Key;
-            values[index] = option.Value;
-            index++;
+            return null;
         }
 
-        var result = build(keys, values, (nuint)options.Count);
-        var handle = Operator.ToValueOrThrowAndRelease<IntPtr, OpenDALOptionsResult>(result);
-        return new NativeOptionsHandle(handle, release);
+        return WriteNative(options, static (writer, options) => WriteObject(writer, options));
+    }
+
+    /// <summary>
+    /// Serializes string options as a null-terminated UTF-8 JSON object, or
+    /// returns <see langword="null"/> when there are none.
+    /// </summary>
+    /// <remarks>
+    /// A null value is written as JSON <c>null</c>, which native code rejects
+    /// with <see cref="ErrorCode.ConfigInvalid"/> naming the key.
+    /// </remarks>
+    public static byte[]? Serialize(IReadOnlyDictionary<string, string>? options)
+    {
+        if (options is null || options.Count == 0)
+        {
+            return null;
+        }
+
+        return WriteNative(options, static (writer, options) =>
+        {
+            writer.WriteStartObject();
+            foreach (var entry in options)
+            {
+                writer.WriteString(entry.Key, entry.Value);
+            }
+
+            writer.WriteEndObject();
+        });
+    }
+
+    private static void WriteObject(Utf8JsonWriter writer, IOptions options)
+    {
+        writer.WriteStartObject();
+        options.Build(new NativeOptionsBuilder(writer));
+        writer.WriteEndObject();
+    }
+
+    // Each thread reuses one writer and buffer, so serializing allocates
+    // only the returned array. A buffer grown past this size is dropped
+    // instead of being kept alive for the thread's lifetime.
+    private const int RetainedBufferCapacity = 16 * 1024;
+
+    [ThreadStatic]
+    private static ArrayBufferWriter<byte>? threadBuffer;
+
+    [ThreadStatic]
+    private static Utf8JsonWriter? threadWriter;
+
+    [ThreadStatic]
+    private static bool threadWriterInUse;
+
+    /// <summary>
+    /// Runs <paramref name="write"/> and returns its JSON as a null-terminated
+    /// UTF-8 array that native code reads as a C string.
+    /// </summary>
+    /// <remarks>
+    /// A call that re-enters while the thread's writer is busy, for example
+    /// from a caller's dictionary that calls back into OpenDAL, gets a writer
+    /// of its own instead of resetting the busy one.
+    /// </remarks>
+    private static byte[] WriteNative<TState>(TState state, Action<Utf8JsonWriter, TState> write)
+    {
+        if (threadWriterInUse)
+        {
+            var ownBuffer = new ArrayBufferWriter<byte>();
+            using (var ownWriter = new Utf8JsonWriter(ownBuffer))
+            {
+                write(ownWriter, state);
+            }
+
+            return ToNativeString(ownBuffer);
+        }
+
+        var buffer = threadBuffer ??= new ArrayBufferWriter<byte>(256);
+        buffer.ResetWrittenCount();
+        var writer = threadWriter;
+        if (writer is null)
+        {
+            writer = threadWriter = new Utf8JsonWriter(buffer);
+        }
+        else
+        {
+            writer.Reset(buffer);
+        }
+
+        threadWriterInUse = true;
+        try
+        {
+            write(writer, state);
+            writer.Flush();
+            return ToNativeString(buffer);
+        }
+        finally
+        {
+            threadWriterInUse = false;
+            if (buffer.Capacity > RetainedBufferCapacity)
+            {
+                threadBuffer = null;
+                threadWriter = null;
+            }
+        }
+    }
+
+    private static byte[] ToNativeString(ArrayBufferWriter<byte> buffer)
+    {
+        var bytes = new byte[buffer.WrittenCount + 1];
+        buffer.WrittenSpan.CopyTo(bytes);
+        return bytes;
     }
 }
