@@ -36,6 +36,11 @@ namespace OpenDAL;
 /// </summary>
 public partial class Operator : SafeHandle
 {
+    /// <summary>
+    /// Maximum number of entries fetched per native call while enumerating.
+    /// </summary>
+    private const nuint ListerBatchSize = 256;
+
     private readonly OperatorInfo info;
 
     private Operator(IntPtr nativeHandle) : base(IntPtr.Zero, true)
@@ -789,6 +794,130 @@ public partial class Operator : SafeHandle
                     &OnListCompleted,
                     context
                 );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lists entries under the specified path lazily.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="List"/>, entries are fetched in batches while the
+    /// sequence is enumerated, so memory stays bounded for large listings.
+    /// Each enumeration starts a new listing, and errors such as a missing
+    /// path surface when enumeration starts.
+    /// </remarks>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="options">Additional list options.</param>
+    /// <returns>A lazily evaluated sequence of entries.</returns>
+    public IEnumerable<Entry> EnumerateEntries(string path, ListOptions? options = null)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        ArgumentNullException.ThrowIfNull(path);
+
+        return EnumerateEntriesCore(path, options);
+    }
+
+    /// <summary>
+    /// Lists entries under the specified path lazily and asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ListAsync"/>, entries are fetched in batches while
+    /// the sequence is enumerated, so memory stays bounded for large listings.
+    /// Each enumeration starts a new listing, and errors such as a missing
+    /// path surface when enumeration starts.
+    /// </remarks>
+    /// <param name="path">Target path in the configured backend.</param>
+    /// <param name="options">Additional list options.</param>
+    /// <param name="cancellationToken">Cancellation token for the enumeration.</param>
+    /// <returns>A lazily evaluated asynchronous sequence of entries.</returns>
+    public IAsyncEnumerable<Entry> EnumerateEntriesAsync(
+        string path,
+        ListOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        ArgumentNullException.ThrowIfNull(path);
+
+        return EnumerateEntriesAsyncCore(path, options, cancellationToken);
+    }
+
+    private IEnumerable<Entry> EnumerateEntriesCore(string path, ListOptions? options)
+    {
+        var lister = CreateLister(path, options);
+        try
+        {
+            while (true)
+            {
+                var result = NativeMethods.operator_lister_next(lister, ListerBatchSize);
+                var batch = ToValueOrThrowAndRelease<IReadOnlyList<Entry>, OpenDALEntryListResult>(result);
+                if (batch.Count == 0)
+                {
+                    yield break;
+                }
+
+                foreach (var entry in batch)
+                {
+                    yield return entry;
+                }
+            }
+        }
+        finally
+        {
+            NativeMethods.operator_lister_free(lister);
+        }
+    }
+
+    private async IAsyncEnumerable<Entry> EnumerateEntriesAsyncCore(
+        string path,
+        ListOptions? options,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var lister = CreateLister(path, options);
+        try
+        {
+            while (true)
+            {
+                var batch = await NextListerBatchAsync(lister, cancellationToken).ConfigureAwait(false);
+                if (batch.Count == 0)
+                {
+                    yield break;
+                }
+
+                foreach (var entry in batch)
+                {
+                    yield return entry;
+                }
+            }
+        }
+        finally
+        {
+            // A batch abandoned by cancellation keeps the native listing alive
+            // until it completes, so freeing the handle here is safe.
+            NativeMethods.operator_lister_free(lister);
+        }
+    }
+
+    /// <summary>
+    /// Creates a native lister. The listing itself opens on the first batch.
+    /// </summary>
+    private IntPtr CreateLister(string path, ListOptions? options)
+    {
+        ObjectDisposedException.ThrowIf(IsInvalid, this);
+        var nativeOptions = NativeOptionsBuilder.Serialize(options);
+        var result = NativeMethods.operator_lister_create(this, path, nativeOptions);
+        return ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result);
+    }
+
+    private static Task<IReadOnlyList<Entry>> NextListerBatchAsync(IntPtr lister, CancellationToken cancellationToken)
+    {
+        return SubmitAsyncOperation<IReadOnlyList<Entry>>(SubmitNextAsync, cancellationToken);
+
+        OpenDALResult SubmitNextAsync(long context)
+        {
+            unsafe
+            {
+                return NativeMethods.operator_lister_next_async(lister, ListerBatchSize, &OnListCompleted, context);
             }
         }
     }

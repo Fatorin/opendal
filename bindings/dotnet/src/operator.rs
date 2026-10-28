@@ -34,11 +34,15 @@ use crate::{
         OpendalReadResult, OpendalResult,
     },
     utils::{
-        release_c_string, require_callback, require_cstr, require_data_ptr, require_op_handle,
+        config_invalid_error, release_c_string, require_callback, require_cstr, require_data_ptr,
+        require_op_handle,
     },
-    validators::prelude::{
-        validate_concurrent_limit_options, validate_retry_options, validate_throttle_options,
-        validate_timeout_options,
+    validators::{
+        prelude::{
+            validate_concurrent_limit_options, validate_retry_options, validate_throttle_options,
+            validate_timeout_options,
+        },
+        validate_positive_integer,
     },
 };
 
@@ -1446,6 +1450,212 @@ pub unsafe extern "C" fn operator_input_stream_free(stream: *mut c_void) {
 
     unsafe {
         drop(Box::from_raw(stream as *mut InputStream));
+    }
+}
+
+/// A lazily advancing listing behind an opaque handle.
+///
+/// The listing opens on the first batch, so creating a handle never blocks
+/// on I/O. An error that interrupts a batch is held back so the entries
+/// listed before it are still delivered; the next call reports it.
+struct EntryLister {
+    executor: Arc<Executor>,
+    inner: Arc<Mutex<ListerState>>,
+}
+
+enum ListerState {
+    Pending {
+        op: opendal::Operator,
+        path: String,
+        options: opendal::options::ListOptions,
+    },
+    Listing {
+        lister: opendal::Lister,
+        error: Option<opendal::Error>,
+    },
+}
+
+impl ListerState {
+    /// Collect up to `max` entries. An empty batch means the listing ended.
+    async fn next_batch(&mut self, max: usize) -> opendal::Result<Vec<opendal::Entry>> {
+        if let ListerState::Pending { op, path, options } = self {
+            let lister = op.lister_options(path, options.clone()).await?;
+            *self = ListerState::Listing {
+                lister,
+                error: None,
+            };
+        }
+        let ListerState::Listing { lister, error } = self else {
+            unreachable!("the listing is open after the pending state is resolved");
+        };
+
+        if let Some(error) = error.take() {
+            return Err(error);
+        }
+
+        let mut entries = Vec::new();
+        while entries.len() < max {
+            match lister.next().await {
+                Some(Ok(entry)) => entries.push(entry),
+                Some(Err(err)) if entries.is_empty() => return Err(err),
+                Some(Err(err)) => {
+                    *error = Some(err);
+                    break;
+                }
+                None => break,
+            }
+        }
+        Ok(entries)
+    }
+}
+
+fn require_lister<'a>(lister: *mut c_void) -> Result<&'a EntryLister, OpenDALError> {
+    if lister.is_null() {
+        return Err(config_invalid_error("lister handle is null"));
+    }
+
+    Ok(unsafe { &*(lister as *const EntryLister) })
+}
+
+/// Create a lister that lists `path` lazily with options.
+///
+/// The listing opens on the first `operator_lister_next*` call, which reports
+/// errors such as a missing path. On success, the returned handle must be released by `operator_lister_free`.
+/// # Safety
+///
+/// - `op_handle` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   list options.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_lister_create(
+    op_handle: *const OperatorHandle,
+    path: *const c_char,
+    options: *const c_char,
+) -> OpendalOperatorResult {
+    match operator_lister_create_inner(op_handle, path, options) {
+        Ok(value) => OpendalOperatorResult::ok(value),
+        Err(error) => OpendalOperatorResult::from_error(error),
+    }
+}
+
+fn operator_lister_create_inner(
+    op_handle: *const OperatorHandle,
+    path: *const c_char,
+    options: *const c_char,
+) -> Result<*mut c_void, OpenDALError> {
+    let handle = require_op_handle(op_handle)?;
+    let path = require_cstr(path, "path")?.to_string();
+    let options = parse_options::<ListOptionsJson>(options)?;
+
+    Ok(Box::into_raw(Box::new(EntryLister {
+        executor: handle.executor.clone(),
+        inner: Arc::new(Mutex::new(ListerState::Pending {
+            op: handle.operator(),
+            path,
+            options,
+        })),
+    })) as *mut c_void)
+}
+
+/// List up to `max` next entries synchronously.
+///
+/// Returns an empty list when the listing has ended. On success, the payload
+/// must be released with the entry list result release function.
+/// # Safety
+///
+/// - `lister` must be a valid handle from `operator_lister_create`.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_lister_next(lister: *mut c_void, max: usize) -> OpendalEntryListResult {
+    match operator_lister_next_inner(lister, max) {
+        Ok(value) => OpendalEntryListResult::ok(value),
+        Err(error) => OpendalEntryListResult::from_error(error),
+    }
+}
+
+fn operator_lister_next_inner(
+    lister: *mut c_void,
+    max: usize,
+) -> Result<*mut c_void, OpenDALError> {
+    let lister = require_lister(lister)?;
+    validate_positive_integer(max, "lister batch size")?;
+
+    let inner = lister.inner.clone();
+    lister
+        .executor
+        .block_on(async move { inner.lock().await.next_batch(max).await })
+        .map(into_entry_list_ptr)
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// List up to `max` next entries asynchronously.
+///
+/// The callback is invoked exactly once. An empty list means the listing has
+/// ended.
+/// # Safety
+///
+/// - `lister` must be a valid handle from `operator_lister_create`.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_lister_next_async(
+    lister: *mut c_void,
+    max: usize,
+    callback: Option<ListCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_lister_next_async_inner(lister, max, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_lister_next_async_inner(
+    lister: *mut c_void,
+    max: usize,
+    callback: Option<ListCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let lister = require_lister(lister)?;
+    validate_positive_integer(max, "lister batch size")?;
+    let callback = require_callback(callback)?;
+
+    let inner = lister.inner.clone();
+    lister.executor.spawn(async move {
+        let result = inner
+            .lock()
+            .await
+            .next_batch(max)
+            .await
+            .map(into_entry_list_ptr)
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalEntryListResult::ok(value),
+                Err(error) => OpendalEntryListResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Release a lister handle.
+///
+/// A pending asynchronous call keeps the listing alive until it completes.
+/// # Safety
+///
+/// - `lister` must be null or a handle from `operator_lister_create`.
+/// - This function must be called at most once for the same handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_lister_free(lister: *mut c_void) {
+    if lister.is_null() {
+        return;
+    }
+
+    unsafe {
+        drop(Box::from_raw(lister as *mut EntryLister));
     }
 }
 
