@@ -101,6 +101,57 @@ public class ConstructorTest
     }
 
     [Fact]
+    public void FromUri_MemoryUri_TakesRootFromPath()
+    {
+        using var op = Operator.FromUri("memory:///uri/root");
+
+        Assert.Equal("memory", op.Info.Scheme);
+        Assert.Equal("/uri/root/", op.Info.Root);
+    }
+
+    [Fact]
+    public void FromUri_OptionsOverrideUri()
+    {
+        using var op = Operator.FromUri(
+            "memory:///uri/root",
+            new Dictionary<string, string> { ["root"] = "/option/root" });
+
+        Assert.Equal("/option/root/", op.Info.Root);
+    }
+
+    [Fact]
+    public void FromUri_FsUriWithRootOption_WritesUnderRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"opendal-dotnet-uri-{Guid.NewGuid():N}");
+        try
+        {
+            using var op = Operator.FromUri("fs:///", new Dictionary<string, string> { ["root"] = root });
+            op.Write("hello.txt", "world"u8.ToArray());
+
+            Assert.Equal("world", File.ReadAllText(Path.Combine(root, "hello.txt")));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void FromUri_UriIsWhitespace_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => Operator.FromUri("   "));
+    }
+
+    [Fact]
+    public void FromUri_UnknownScheme_ThrowsOpenDALException()
+    {
+        Assert.Throws<OpenDALException>(() => Operator.FromUri("no-such-service://bucket"));
+    }
+
+    [Fact]
     public void Constructor_OptionsDictionaryCallsBackIntoOpenDAL_KeepsOptionsIntact()
     {
         using var other = new Operator("memory");

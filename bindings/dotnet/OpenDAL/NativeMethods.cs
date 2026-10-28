@@ -41,6 +41,16 @@ internal partial class NativeMethods
         IntPtr executor
     );
 
+    [LibraryImport(__DllName, EntryPoint = "operator_construct_from_uri", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALOperatorResult operator_construct_from_uri(
+        string uri,
+        IntPtr* optionKeys,
+        IntPtr* optionValues,
+        nuint optionLen,
+        IntPtr executor
+    );
+
     [LibraryImport(__DllName, EntryPoint = "operator_free")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial void operator_free(IntPtr op);
