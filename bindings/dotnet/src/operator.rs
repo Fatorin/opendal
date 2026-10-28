@@ -23,8 +23,9 @@ use crate::{
     metadata::OpendalMetadata,
     operator_info::{OpendalOperatorInfo, into_operator_info},
     options::{
-        CopyOptionsJson, DeleteOptionsJson, ListOptionsJson, ReadOptionsJson, RenameOptionsJson,
-        StatOptionsJson, WriteOptionsJson, parse_options, parse_string_map,
+        ComposeOptionsJson, ComposeSourceOptionsJson, CopyOptionsJson, DeleteOptionsJson,
+        ListOptionsJson, ReadOptionsJson, RenameOptionsJson, RestoreOptionsJson, StatOptionsJson,
+        WriteOptionsJson, parse_options, parse_path_items, parse_string_map,
     },
     presign::into_presigned_request_ptr,
     result::{
@@ -822,6 +823,216 @@ fn operator_rename_with_options_async_inner(
             match result {
                 Ok(()) => OpendalResult::ok(),
                 Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Restore `path` synchronously with options.
+/// # Safety
+///
+/// - `op_handle` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   restore options.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_restore_with_options(
+    op_handle: *const OperatorHandle,
+    path: *const c_char,
+    options: *const c_char,
+) -> OpendalResult {
+    match operator_restore_with_options_inner(op_handle, path, options) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_restore_with_options_inner(
+    op_handle: *const OperatorHandle,
+    path: *const c_char,
+    options: *const c_char,
+) -> Result<(), OpenDALError> {
+    let handle = require_op_handle(op_handle)?;
+    let executor = handle.executor.clone();
+    let path = require_cstr(path, "path")?;
+
+    let options = parse_options::<RestoreOptionsJson>(options)?;
+
+    executor
+        .block_on(handle.restore_options(path, options))
+        .map_err(OpenDALError::from_opendal_error)
+}
+
+/// Restore `path` asynchronously with options.
+///
+/// The callback is invoked exactly once with the final result.
+/// # Safety
+///
+/// - `op_handle` must be a valid operator pointer from `operator_construct`.
+/// - `path` must be a valid null-terminated UTF-8 string.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   restore options.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub extern "C" fn operator_restore_with_options_async(
+    op_handle: *const OperatorHandle,
+    path: *const c_char,
+    options: *const c_char,
+    callback: Option<VoidCallback>,
+    context: i64,
+) -> OpendalResult {
+    match operator_restore_with_options_async_inner(op_handle, path, options, callback, context) {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+fn operator_restore_with_options_async_inner(
+    op_handle: *const OperatorHandle,
+    path: *const c_char,
+    options: *const c_char,
+    callback: Option<VoidCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let handle = require_op_handle(op_handle)?;
+    let executor = handle.executor.clone();
+    let path = require_cstr(path, "path")?.to_string();
+    let callback = require_callback(callback)?;
+
+    let options = parse_options::<RestoreOptionsJson>(options)?;
+
+    let op = handle.operator();
+    executor.spawn(async move {
+        let result = op
+            .restore_options(&path, options)
+            .await
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(()) => OpendalResult::ok(),
+                Err(error) => OpendalResult::from_error(error),
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Compose `sources` into `target_path` synchronously with options.
+///
+/// On success, the returned payload must be released with
+/// `opendal_metadata_result_release`.
+/// # Safety
+///
+/// - `op_handle` must be a valid operator pointer from `operator_construct`.
+/// - `sources` must be a valid null-terminated UTF-8 JSON array of
+///   `{"path": ..., "options": {...}}` items, where `options` is optional.
+/// - `target_path` must be a valid null-terminated UTF-8 string.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   compose options.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_compose_with_options(
+    op_handle: *const OperatorHandle,
+    sources: *const c_char,
+    target_path: *const c_char,
+    options: *const c_char,
+) -> OpendalMetadataResult {
+    match unsafe { operator_compose_with_options_inner(op_handle, sources, target_path, options) } {
+        Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
+        Err(error) => OpendalMetadataResult::from_error(error),
+    }
+}
+
+unsafe fn operator_compose_with_options_inner(
+    op_handle: *const OperatorHandle,
+    sources: *const c_char,
+    target_path: *const c_char,
+    options: *const c_char,
+) -> Result<*mut OpendalMetadata, OpenDALError> {
+    let handle = require_op_handle(op_handle)?;
+    let executor = handle.executor.clone();
+    let sources = parse_path_items::<ComposeSourceOptionsJson>(sources, "sources")?;
+    let target_path = require_cstr(target_path, "target_path")?;
+
+    let options = parse_options::<ComposeOptionsJson>(options)?;
+
+    let metadata = executor
+        .block_on(handle.compose_options(sources, target_path, options))
+        .map_err(OpenDALError::from_opendal_error)?;
+    Ok(into_metadata_ptr(metadata))
+}
+
+/// Compose `sources` into `target_path` asynchronously with options.
+///
+/// The callback is invoked exactly once. On success, the callback result must
+/// be released with `opendal_metadata_result_release`.
+/// # Safety
+///
+/// - `op_handle` must be a valid operator pointer from `operator_construct`.
+/// - `sources` must be a valid null-terminated UTF-8 JSON array of
+///   `{"path": ..., "options": {...}}` items, where `options` is optional.
+/// - `target_path` must be a valid null-terminated UTF-8 string.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   compose options.
+/// - `callback` must be a valid function pointer and remain callable until invoked.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_compose_with_options_async(
+    op_handle: *const OperatorHandle,
+    sources: *const c_char,
+    target_path: *const c_char,
+    options: *const c_char,
+    callback: Option<MetadataCallback>,
+    context: i64,
+) -> OpendalResult {
+    match unsafe {
+        operator_compose_with_options_async_inner(
+            op_handle,
+            sources,
+            target_path,
+            options,
+            callback,
+            context,
+        )
+    } {
+        Ok(()) => OpendalResult::ok(),
+        Err(error) => OpendalResult::from_error(error),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn operator_compose_with_options_async_inner(
+    op_handle: *const OperatorHandle,
+    sources: *const c_char,
+    target_path: *const c_char,
+    options: *const c_char,
+    callback: Option<MetadataCallback>,
+    context: i64,
+) -> Result<(), OpenDALError> {
+    let handle = require_op_handle(op_handle)?;
+    let executor = handle.executor.clone();
+    let sources = parse_path_items::<ComposeSourceOptionsJson>(sources, "sources")?;
+    let target_path = require_cstr(target_path, "target_path")?.to_string();
+    let callback = require_callback(callback)?;
+
+    let options = parse_options::<ComposeOptionsJson>(options)?;
+
+    let op = handle.operator();
+    executor.spawn(async move {
+        let result = op
+            .compose_options(sources, &target_path, options)
+            .await
+            .map(into_metadata_ptr)
+            .map_err(OpenDALError::from_opendal_error);
+
+        callback(
+            context,
+            match result {
+                Ok(value) => OpendalMetadataResult::ok(value as *mut c_void),
+                Err(error) => OpendalMetadataResult::from_error(error),
             },
         );
     });

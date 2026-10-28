@@ -199,6 +199,45 @@ internal readonly struct NativeOptionsBuilder
         });
     }
 
+    /// <summary>
+    /// Serializes items as a null-terminated UTF-8 JSON array of
+    /// <c>{"path": ..., "options": {...}}</c>
+    /// objects, omitting <c>options</c> when an item has none.
+    /// </summary>
+    /// <exception cref="ArgumentException">An item is null.</exception>
+    public static byte[] SerializeItems<T>(
+        IEnumerable<T?> items,
+        Func<T, string> path,
+        Func<T, IOptions?> options,
+        string paramName)
+        where T : class
+    {
+        // Materialize first, so a lazy sequence that calls back into OpenDAL
+        // runs before serialization starts rather than in the middle of it.
+        var list = items as IReadOnlyList<T?> ?? items.ToList();
+        return WriteNative((list, path, options, paramName), static (writer, state) =>
+        {
+            writer.WriteStartArray();
+            for (var index = 0; index < state.list.Count; index++)
+            {
+                var item = state.list[index]
+                    ?? throw new ArgumentException($"Item at index {index} is null.", state.paramName);
+
+                writer.WriteStartObject();
+                writer.WriteString("path", state.path(item));
+                if (state.options(item) is { } itemOptions)
+                {
+                    writer.WritePropertyName("options");
+                    WriteObject(writer, itemOptions);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        });
+    }
+
     private static void WriteObject(Utf8JsonWriter writer, IOptions options)
     {
         writer.WriteStartObject();

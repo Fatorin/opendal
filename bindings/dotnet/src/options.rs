@@ -60,6 +60,21 @@ pub(crate) fn parse_options<T: OptionsJson>(
     mirror.into_options()
 }
 
+/// Decode a JSON array of `{"path": ..., "options": {...}}` items into
+/// ordered pairs, where a missing `options` member selects the defaults.
+///
+/// `json` must be a valid null-terminated UTF-8 string.
+pub(crate) fn parse_path_items<T: OptionsJson>(
+    json: *const c_char,
+    field: &str,
+) -> Result<Vec<(String, T::Options)>, OpenDALError> {
+    let items: Vec<PathItem<T>> = decode(require_cstr(json, field)?)?;
+    items
+        .into_iter()
+        .map(|item| Ok((item.path, item.options.into_options()?)))
+        .collect()
+}
+
 /// Decode a JSON object of string values, where null selects an empty map.
 ///
 /// `json` must be null or a valid null-terminated UTF-8 string.
@@ -85,6 +100,17 @@ pub(crate) fn parse_string_map(
 fn decode<T: DeserializeOwned>(json: &str) -> Result<T, OpenDALError> {
     serde_json::from_str(json)
         .map_err(|err| config_invalid_error(format!("invalid options: {err}")))
+}
+
+#[derive(Deserialize)]
+#[serde(
+    deny_unknown_fields,
+    bound(deserialize = "T: Deserialize<'de> + Default")
+)]
+struct PathItem<T> {
+    path: String,
+    #[serde(default)]
+    options: T,
 }
 
 fn timestamp(millis: i64) -> Result<Timestamp, OpenDALError> {
@@ -386,6 +412,97 @@ impl OptionsJson for RenameOptionsJson {
     }
 }
 
+/// JSON mirror of `opendal::options::RestoreOptions`.
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct RestoreOptionsJson {
+    version: Option<String>,
+    if_not_exists: bool,
+}
+
+impl OptionsJson for RestoreOptionsJson {
+    type Options = opendal::options::RestoreOptions;
+
+    fn into_options(self) -> Result<Self::Options, OpenDALError> {
+        let mut options = Self::Options::default();
+        options.version = self.version;
+        options.if_not_exists = self.if_not_exists;
+
+        Ok(options)
+    }
+}
+
+/// JSON mirror of `opendal::options::ComposeOptions`.
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct ComposeOptionsJson {
+    cache_control: Option<String>,
+    content_type: Option<String>,
+    content_disposition: Option<String>,
+    content_encoding: Option<String>,
+    user_metadata: Option<HashMap<String, String>>,
+    if_match: Option<String>,
+    if_none_match: Option<String>,
+    if_version_match: Option<String>,
+    if_version_not_match: Option<String>,
+    if_not_exists: bool,
+    if_not_changed: Option<MetadataJson>,
+    concurrent: Option<usize>,
+}
+
+impl OptionsJson for ComposeOptionsJson {
+    type Options = opendal::options::ComposeOptions;
+
+    fn into_options(self) -> Result<Self::Options, OpenDALError> {
+        let mut options = Self::Options::default();
+        options.cache_control = self.cache_control;
+        options.content_type = self.content_type;
+        options.content_disposition = self.content_disposition;
+        options.content_encoding = self.content_encoding;
+        options.user_metadata = self.user_metadata;
+        options.if_match = self.if_match;
+        options.if_none_match = self.if_none_match;
+        options.if_version_match = self.if_version_match;
+        options.if_version_not_match = self.if_version_not_match;
+        options.if_not_exists = self.if_not_exists;
+        options.if_not_changed = self
+            .if_not_changed
+            .map(MetadataJson::into_metadata)
+            .transpose()?;
+        if let Some(value) = self.concurrent {
+            validate_positive_integer(value, "compose concurrent")?;
+            options.concurrent = value;
+        }
+
+        Ok(options)
+    }
+}
+
+/// JSON mirror of `opendal::options::ComposeSourceOptions`.
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct ComposeSourceOptionsJson {
+    version: Option<String>,
+    if_match: Option<String>,
+    if_not_changed: Option<MetadataJson>,
+}
+
+impl OptionsJson for ComposeSourceOptionsJson {
+    type Options = opendal::options::ComposeSourceOptions;
+
+    fn into_options(self) -> Result<Self::Options, OpenDALError> {
+        let mut options = Self::Options::default();
+        options.version = self.version;
+        options.if_match = self.if_match;
+        options.if_not_changed = self
+            .if_not_changed
+            .map(MetadataJson::into_metadata)
+            .transpose()?;
+
+        Ok(options)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::ffi::{CStr, CString};
@@ -472,6 +589,19 @@ mod tests {
             parse_options::<ReadOptionsJson>(json(r#"{"offset": 1, "suffix_length": 1}"#).as_ptr())
                 .expect_err("a suffix range cannot have an offset");
         assert!(message(&err).contains("suffix_length"));
+    }
+
+    #[test]
+    fn parse_path_items_keeps_order_and_defaults() {
+        let items = parse_path_items::<DeleteOptionsJson>(
+            json(r#"[{"path": "a", "options": {"version": "1"}}, {"path": "b"}]"#).as_ptr(),
+            "targets",
+        )
+        .unwrap();
+        assert_eq!(items[0].0, "a");
+        assert_eq!(items[0].1.version.as_deref(), Some("1"));
+        assert_eq!(items[1].0, "b");
+        assert_eq!(items[1].1, opendal::options::DeleteOptions::default());
     }
 
     #[test]

@@ -60,6 +60,21 @@ pub(crate) fn parse_options<T: OptionsJson>(
     mirror.into_options()
 }
 
+/// Decode a JSON array of `{"path": ..., "options": {...}}` items into
+/// ordered pairs, where a missing `options` member selects the defaults.
+///
+/// `json` must be a valid null-terminated UTF-8 string.
+pub(crate) fn parse_path_items<T: OptionsJson>(
+    json: *const c_char,
+    field: &str,
+) -> Result<Vec<(String, T::Options)>, OpenDALError> {
+    let items: Vec<PathItem<T>> = decode(require_cstr(json, field)?)?;
+    items
+        .into_iter()
+        .map(|item| Ok((item.path, item.options.into_options()?)))
+        .collect()
+}
+
 /// Decode a JSON object of string values, where null selects an empty map.
 ///
 /// `json` must be null or a valid null-terminated UTF-8 string.
@@ -83,6 +98,14 @@ pub(crate) fn parse_string_map(
 fn decode<T: DeserializeOwned>(json: &str) -> Result<T, OpenDALError> {
     serde_json::from_str(json)
         .map_err(|err| config_invalid_error(format!("invalid options: {err}")))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, bound(deserialize = "T: Deserialize<'de> + Default"))]
+struct PathItem<T> {
+    path: String,
+    #[serde(default)]
+    options: T,
 }
 
 fn timestamp(millis: i64) -> Result<Timestamp, OpenDALError> {
@@ -221,6 +244,19 @@ mod tests {
         let err = parse_options::<ReadOptionsJson>(json(r#"{"offset": 1, "suffix_length": 1}"#).as_ptr())
             .expect_err("a suffix range cannot have an offset");
         assert!(message(&err).contains("suffix_length"));
+    }
+
+    #[test]
+    fn parse_path_items_keeps_order_and_defaults() {
+        let items = parse_path_items::<DeleteOptionsJson>(
+            json(r#"[{"path": "a", "options": {"version": "1"}}, {"path": "b"}]"#).as_ptr(),
+            "targets",
+        )
+        .unwrap();
+        assert_eq!(items[0].0, "a");
+        assert_eq!(items[0].1.version.as_deref(), Some("1"));
+        assert_eq!(items[1].0, "b");
+        assert_eq!(items[1].1, opendal::options::DeleteOptions::default());
     }
 
     #[test]

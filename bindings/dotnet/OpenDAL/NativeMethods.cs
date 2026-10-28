@@ -384,6 +384,52 @@ internal partial class NativeMethods
 
     #endregion
 
+    #region Restore
+
+    [LibraryImport(__DllName, EntryPoint = "operator_restore_with_options", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALResult operator_restore_with_options(
+        Operator op,
+        string path,
+        byte[]? options
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_restore_with_options_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_restore_with_options_async(
+        Operator op,
+        string path,
+        byte[]? options,
+        delegate* unmanaged[Cdecl]<long, OpenDALResult, void> callback,
+        long context
+    );
+
+    #endregion
+
+    #region Compose
+
+    [LibraryImport(__DllName, EntryPoint = "operator_compose_with_options", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALMetadataResult operator_compose_with_options(
+        Operator op,
+        byte[] sources,
+        string targetPath,
+        byte[]? options
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_compose_with_options_async", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_compose_with_options_async(
+        Operator op,
+        byte[] sources,
+        string targetPath,
+        byte[]? options,
+        delegate* unmanaged[Cdecl]<long, OpenDALMetadataResult, void> callback,
+        long context
+    );
+
+    #endregion
+
     #region Presign
 
     [LibraryImport(__DllName, EntryPoint = "operator_presign_read_async", StringMarshalling = StringMarshalling.Utf8)]
