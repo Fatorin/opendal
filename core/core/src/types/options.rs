@@ -16,10 +16,38 @@
 // under the License.
 
 //! Options module provides options definitions for operations.
+//!
+//! # Deserialization
+//!
+//! Every options struct implements [`serde::Deserialize`], so a binding can
+//! pass options across its FFI boundary as one serialized value, such as a
+//! JSON object, instead of mirroring each field. The representation is:
+//!
+//! - Members use the field names. A missing member keeps the struct's
+//!   [`Default`] value, and an unknown member is an error, so a misspelled
+//!   option fails instead of being ignored.
+//! - Timestamps such as `if_modified_since` are Unix milliseconds.
+//! - `range` is `{"offset": .., "size": ..}`, where both members are optional
+//!   and a missing `size` reads to the end, or `{"suffix": ..}` to read the
+//!   last bytes. `suffix` cannot be combined with `offset` or `size`.
+//! - `if_not_changed` is `{"etag": .., "version": ..}`, the two values the
+//!   condition is derived from. Both members are optional; an object with
+//!   neither still deserializes, so the operation rejects it instead of
+//!   silently dropping the condition.
+//!
+//! ```
+//! # use opendal_core::options::ReadOptions;
+//! let options: ReadOptions = serde_json::from_str(
+//!     r#"{"range": {"suffix": 1024}, "if_modified_since": 1700000000000}"#,
+//! )
+//! .unwrap();
+//! assert!(options.range.is_suffix());
+//! ```
 
 use crate::Metadata;
 use crate::raw::Timestamp;
 use crate::types::BytesRange;
+use serde::Deserialize;
 use std::collections::HashMap;
 
 /// Options for delete operations.
@@ -41,7 +69,8 @@ use std::collections::HashMap;
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct DeleteOptions {
     /// Delete the given version of the file instead of the current one.
     ///
@@ -117,6 +146,7 @@ pub struct DeleteOptions {
     /// service does not support the derived primitive condition, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// a version nor an ETag.
+    #[serde(deserialize_with = "de::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 }
 
@@ -127,7 +157,8 @@ pub struct DeleteOptions {
 /// - Pagination: `limit`, `start_after`.
 /// - Versioning: `versions`, `deleted` (effective on version-aware backends).
 
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ListOptions {
     /// Maximum results per request (backend hint) to control memory and throttling.
     pub limit: Option<usize>,
@@ -155,7 +186,8 @@ pub struct ListOptions {
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ReadOptions {
     /// Set `range` for this operation.
     ///
@@ -167,6 +199,7 @@ pub struct ReadOptions {
     /// - `BytesRange::suffix(1024)` means read the last `min(1024, n)` bytes of file
     ///
     /// The type implements `From<RangeBounds<u64>>`, so users can use `(1024..).into()` instead.
+    #[serde(deserialize_with = "de::bytes_range")]
     pub range: BytesRange,
     /// Read the given version of the file instead of the current one.
     ///
@@ -233,6 +266,7 @@ pub struct ReadOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_modified_since`].
+    #[serde(deserialize_with = "de::option_timestamp_millis")]
     pub if_modified_since: Option<Timestamp>,
     /// Read only when the file was not modified after this timestamp.
     ///
@@ -244,6 +278,7 @@ pub struct ReadOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_unmodified_since`].
+    #[serde(deserialize_with = "de::option_timestamp_millis")]
     pub if_unmodified_since: Option<Timestamp>,
 
     /// Known content length of the object.
@@ -318,7 +353,8 @@ pub struct ReadOptions {
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ReaderOptions {
     /// Read the given version of the file instead of the current one.
     ///
@@ -385,6 +421,7 @@ pub struct ReaderOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_modified_since`].
+    #[serde(deserialize_with = "de::option_timestamp_millis")]
     pub if_modified_since: Option<Timestamp>,
     /// Read only when the file was not modified after this timestamp.
     ///
@@ -396,6 +433,7 @@ pub struct ReaderOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::read_with_if_unmodified_since`].
+    #[serde(deserialize_with = "de::option_timestamp_millis")]
     pub if_unmodified_since: Option<Timestamp>,
 
     /// Known content length of the object.
@@ -470,7 +508,8 @@ pub struct ReaderOptions {
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct StatOptions {
     /// Stat the given version of the file instead of the current one.
     ///
@@ -537,6 +576,7 @@ pub struct StatOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::stat_with_if_modified_since`].
+    #[serde(deserialize_with = "de::option_timestamp_millis")]
     pub if_modified_since: Option<Timestamp>,
     /// Stat only when the file was not modified after this timestamp.
     ///
@@ -548,6 +588,7 @@ pub struct StatOptions {
     /// The operation returns [`crate::ErrorKind::Unsupported`] when the
     /// service does not advertise
     /// [`crate::Capability::stat_with_if_unmodified_since`].
+    #[serde(deserialize_with = "de::option_timestamp_millis")]
     pub if_unmodified_since: Option<Timestamp>,
 
     /// Specify the content-type header that should be sent back by the operation.
@@ -582,7 +623,8 @@ pub struct StatOptions {
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct WriteOptions {
     /// Sets append mode for this operation.
     ///
@@ -773,6 +815,7 @@ pub struct WriteOptions {
     /// service does not support the derived primitive condition, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// a version nor an ETag.
+    #[serde(deserialize_with = "de::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 
     /// Sets concurrent write operations for this writer.
@@ -832,7 +875,8 @@ pub struct WriteOptions {
 ///
 /// These options select or constrain the source object. They do not apply to
 /// the destination object.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ComposeSourceOptions {
     /// Compose this version of the source object.
     ///
@@ -856,6 +900,7 @@ pub struct ComposeSourceOptions {
     /// support the derived source option, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// identity.
+    #[serde(deserialize_with = "de::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 }
 
@@ -863,7 +908,8 @@ pub struct ComposeSourceOptions {
 ///
 /// Metadata fields apply only to the destination. Conditions check the
 /// destination object and follow the matching [`WriteOptions`] contracts.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct ComposeOptions {
     /// Sets Cache-Control metadata on the destination object.
     pub cache_control: Option<String>,
@@ -893,6 +939,7 @@ pub struct ComposeOptions {
     /// [`crate::ErrorKind::Unsupported`] when the service does not support the
     /// derived primitive condition, and [`crate::ErrorKind::ConfigInvalid`]
     /// when the metadata contains neither a version nor an ETag.
+    #[serde(deserialize_with = "de::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
     /// Maximum number of independent backend composition tasks.
     ///
@@ -919,7 +966,8 @@ pub struct ComposeOptions {
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct CopyOptions {
     /// Copy only when no file exists at the destination path.
     ///
@@ -993,6 +1041,7 @@ pub struct CopyOptions {
     /// service does not support the derived primitive condition, and
     /// [`crate::ErrorKind::ConfigInvalid`] when the metadata contains neither
     /// a version nor an ETag.
+    #[serde(deserialize_with = "de::option_metadata_identity")]
     pub if_not_changed: Option<Metadata>,
 
     /// Copy from a specific source file version.
@@ -1051,7 +1100,8 @@ pub struct CopyOptions {
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct RenameOptions {
     /// Rename only when no file exists at the destination path.
     ///
@@ -1073,7 +1123,8 @@ pub struct RenameOptions {
 ///
 /// See the [conditional operation specification][crate::docs::specs::conditional_operations]
 /// for the complete cross-operation contract.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct RestoreOptions {
     /// Restore this historical version as the current version.
     ///
@@ -1097,4 +1148,159 @@ pub struct RestoreOptions {
     /// returns [`crate::ErrorKind::Unsupported`] when the service does not
     /// advertise [`crate::Capability::restore_with_if_not_exists`].
     pub if_not_exists: bool,
+}
+
+/// Representations of the field types that have no serde format of their own.
+mod de {
+    use serde::Deserialize;
+    use serde::Deserializer;
+    use serde::de::Error as _;
+
+    use crate::Metadata;
+    use crate::MetadataBuilder;
+    use crate::raw::Timestamp;
+    use crate::types::BytesRange;
+
+    /// An optional timestamp as Unix milliseconds.
+    pub(super) fn option_timestamp_millis<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Timestamp>, D::Error> {
+        Option::<i64>::deserialize(deserializer)?
+            .map(|millis| Timestamp::from_millisecond(millis).map_err(D::Error::custom))
+            .transpose()
+    }
+
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct MetadataIdentity {
+        etag: Option<String>,
+        version: Option<String>,
+    }
+
+    /// Optional metadata given as the ETag and version that conditions
+    /// derived from metadata compare.
+    pub(super) fn option_metadata_identity<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Metadata>, D::Error> {
+        Ok(
+            Option::<MetadataIdentity>::deserialize(deserializer)?.map(|identity| {
+                let mut builder = MetadataBuilder::unknown();
+                if let Some(etag) = identity.etag {
+                    builder.etag(etag);
+                }
+                if let Some(version) = identity.version {
+                    builder.version(version);
+                }
+                builder.build()
+            }),
+        )
+    }
+
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RangeRepr {
+        offset: Option<u64>,
+        size: Option<u64>,
+        suffix: Option<u64>,
+    }
+
+    /// A byte range given as `{"offset", "size"}` or `{"suffix"}`.
+    pub(super) fn bytes_range<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<BytesRange, D::Error> {
+        let range = RangeRepr::deserialize(deserializer)?;
+        match (range.offset, range.size, range.suffix) {
+            (None, None, Some(size)) => Ok(BytesRange::suffix(size)),
+            (_, _, Some(_)) => Err(D::Error::custom(
+                "`suffix` cannot be combined with `offset` or `size`",
+            )),
+            (offset, size, None) => {
+                let offset = offset.unwrap_or_default();
+                if let Some(size) = size
+                    && offset.checked_add(size).is_none()
+                {
+                    return Err(D::Error::custom("`offset` + `size` overflows u64"));
+                }
+                Ok(BytesRange::new(offset, size))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserialize_uses_defaults_for_missing_members() {
+        let options: ReadOptions = serde_json::from_str("{}").unwrap();
+        assert_eq!(options, ReadOptions::default());
+    }
+
+    #[test]
+    fn deserialize_rejects_unknown_members() {
+        let err = serde_json::from_str::<StatOptions>(r#"{"if_matc": "x"}"#)
+            .expect_err("a misspelled option must fail");
+        assert!(err.to_string().contains("unknown field"), "{err}");
+    }
+
+    #[test]
+    fn deserialize_reads_plain_members() {
+        let options: WriteOptions = serde_json::from_str(
+            r#"{"append": true, "content_type": "text/plain", "user_metadata": {"k": "v"}, "concurrent": 4, "chunk": 1024}"#,
+        )
+        .unwrap();
+        assert!(options.append);
+        assert_eq!(options.content_type.as_deref(), Some("text/plain"));
+        assert_eq!(options.user_metadata.unwrap()["k"], "v");
+        assert_eq!(options.concurrent, 4);
+        assert_eq!(options.chunk, Some(1024));
+    }
+
+    #[test]
+    fn deserialize_reads_timestamps_as_unix_milliseconds() {
+        let options: StatOptions =
+            serde_json::from_str(r#"{"if_modified_since": 1700000000123}"#).unwrap();
+        assert_eq!(
+            options.if_modified_since,
+            Some(Timestamp::from_millisecond(1700000000123).unwrap())
+        );
+    }
+
+    #[test]
+    fn deserialize_reads_range_forms() {
+        let range = |json: &str| serde_json::from_str::<ReadOptions>(json).map(|o| o.range);
+
+        assert_eq!(
+            range(r#"{"range": {"offset": 10, "size": 100}}"#).unwrap(),
+            BytesRange::new(10, Some(100))
+        );
+        assert_eq!(
+            range(r#"{"range": {"offset": 10}}"#).unwrap(),
+            BytesRange::new(10, None)
+        );
+        assert_eq!(
+            range(r#"{"range": {"suffix": 100}}"#).unwrap(),
+            BytesRange::suffix(100)
+        );
+        assert!(range(r#"{"range": {"offset": 1, "suffix": 100}}"#).is_err());
+        assert!(range(r#"{"range": {"offset": 18446744073709551615, "size": 1}}"#).is_err());
+        assert!(range(r#"{"range": {"length": 1}}"#).is_err());
+    }
+
+    #[test]
+    fn deserialize_reads_if_not_changed_identity() {
+        let options: DeleteOptions =
+            serde_json::from_str(r#"{"if_not_changed": {"etag": "\"abc\"", "version": "v1"}}"#)
+                .unwrap();
+        let metadata = options.if_not_changed.unwrap();
+        assert_eq!(metadata.etag(), Some("\"abc\""));
+        assert_eq!(metadata.version(), Some("v1"));
+
+        // An object with neither member must not drop the condition.
+        let options: CopyOptions = serde_json::from_str(r#"{"if_not_changed": {}}"#).unwrap();
+        let metadata = options.if_not_changed.unwrap();
+        assert_eq!(metadata.etag(), None);
+        assert_eq!(metadata.version(), None);
+    }
 }
