@@ -143,6 +143,46 @@ fn operator_construct_inner(
     Ok(Box::into_raw(Box::new(OperatorHandle { op, executor })) as *mut c_void)
 }
 
+/// Construct an OpenDAL operator instance from a URI and key/value options.
+///
+/// The URI selects the service and may carry its root and options, such as
+/// `s3://bucket/path?region=us-east-1`; `options` add to or override them.
+/// Returns a pointer that must be released with `operator_free`.
+/// # Safety
+///
+/// - `uri` must be a valid null-terminated UTF-8 string.
+/// - `options` must be null or a valid null-terminated UTF-8 JSON object of
+///   constructor options.
+/// - `executor` must be either null or a live pointer returned by
+///   `executor_create`. The operator binds it for its whole lifetime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn operator_construct_from_uri(
+    uri: *const c_char,
+    options: *const c_char,
+    executor: *const c_void,
+) -> OpendalOperatorResult {
+    match operator_construct_from_uri_inner(uri, options, executor) {
+        Ok(op) => OpendalOperatorResult::ok(op),
+        Err(error) => OpendalOperatorResult::from_error(error),
+    }
+}
+
+fn operator_construct_from_uri_inner(
+    uri: *const c_char,
+    options: *const c_char,
+    executor: *const c_void,
+) -> Result<*mut c_void, OpenDALError> {
+    let uri = require_cstr(uri, "uri")?;
+    let options = parse_string_map(options)?;
+    // SAFETY: the caller keeps the executor handle alive across this call per
+    // `operator_construct_from_uri`'s contract; the clone owns the runtime
+    // afterwards.
+    let executor = unsafe { executor_or_default(executor)? };
+    let op =
+        opendal::Operator::from_uri((uri, options)).map_err(OpenDALError::from_opendal_error)?;
+    Ok(Box::into_raw(Box::new(OperatorHandle { op, executor })) as *mut c_void)
+}
+
 /// # Safety
 ///
 /// - `op_handle` must be either null or a pointer returned by `operator_construct`.

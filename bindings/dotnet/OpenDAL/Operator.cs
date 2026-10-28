@@ -97,7 +97,10 @@ public partial class Operator : SafeHandle
         Executor? executor = null) : base(IntPtr.Zero, true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scheme);
-        SetHandle(Construct(scheme, options, executor));
+        SetHandle(Construct(
+            options,
+            executor,
+            (nativeOptions, executorHandle) => NativeMethods.operator_construct(scheme, nativeOptions, executorHandle)));
         info = CreateOperatorInfo();
     }
 
@@ -114,22 +117,52 @@ public partial class Operator : SafeHandle
     public Operator(IServiceConfig config, Executor? executor = null) : base(IntPtr.Zero, true)
     {
         ArgumentNullException.ThrowIfNull(config);
-        SetHandle(Construct(config.Scheme, config.ToOptions(), executor));
+        SetHandle(Construct(
+            config.ToOptions(),
+            executor,
+            (nativeOptions, executorHandle) => NativeMethods.operator_construct(config.Scheme, nativeOptions, executorHandle)));
         info = CreateOperatorInfo();
     }
 
+    /// <summary>
+    /// Creates an operator from a URI that selects the service and may carry its root and options.
+    /// </summary>
+    /// <remarks>
+    /// The URI scheme names the service, for example <c>memory:///root</c>,
+    /// <c>fs:///tmp/data</c>, or <c>s3://bucket/path?region=us-east-1</c>.
+    /// Entries in <paramref name="options"/> add to or override the options
+    /// the URI carries.
+    /// </remarks>
+    /// <param name="uri">URI that identifies the backend service and its location.</param>
+    /// <param name="options">Additional key/value options for the selected backend service.</param>
+    /// <param name="executor">Executor that runs the operator's native work, or the shared default.</param>
+    /// <returns>A new operator for the service the URI identifies.</returns>
+    /// <exception cref="ArgumentException"><paramref name="uri"/> is null, empty, or whitespace.</exception>
+    /// <exception cref="ObjectDisposedException"><paramref name="executor"/> has been disposed.</exception>
+    /// <exception cref="OpenDALException">The URI is invalid, names an unsupported service, or construction fails.</exception>
+    public static Operator FromUri(
+        string uri,
+        IReadOnlyDictionary<string, string>? options = null,
+        Executor? executor = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(uri);
+        return new Operator(Construct(
+            options,
+            executor,
+            (nativeOptions, executorHandle) => NativeMethods.operator_construct_from_uri(uri, nativeOptions, executorHandle)));
+    }
+
     private static IntPtr Construct(
-        string scheme,
         IReadOnlyDictionary<string, string>? options,
-        Executor? executor)
+        Executor? executor,
+        Func<byte[]?, IntPtr, OpenDALOperatorResult> construct)
     {
         var nativeOptions = NativeOptionsBuilder.Serialize(options);
         var executorAddRefed = false;
         try
         {
             executor?.DangerousAddRef(ref executorAddRefed);
-            var result = NativeMethods.operator_construct(
-                scheme,
+            var result = construct(
                 nativeOptions,
                 executor?.DangerousGetHandle() ?? IntPtr.Zero);
             return ToValueOrThrowAndRelease<IntPtr, OpenDALOperatorResult>(result);
