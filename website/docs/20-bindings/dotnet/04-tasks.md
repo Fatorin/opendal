@@ -177,12 +177,37 @@ using OpenDAL.Options;
 var entries = op.List("dir/", new ListOptions { Recursive = true });
 ```
 
+`List` collects every entry before it returns. For a large tree,
+`EnumerateEntries` and `EnumerateEntriesAsync` fetch entries in batches while
+you iterate, so memory stays bounded:
+
+```csharp
+await foreach (var entry in op.EnumerateEntriesAsync("dir/", new ListOptions { Recursive = true }))
+{
+    Console.WriteLine(entry.Path);
+}
+```
+
 ## Delete a file or a whole tree
 
 ```csharp
 op.Delete("path/to/file");   // single path
 op.RemoveAll("dir/");        // a path and everything under it
 ```
+
+`DeleteMany` deletes several paths and batches the requests on services that
+support batch deletion. It consumes the sequence lazily, so it can take a
+listing directly:
+
+```csharp
+op.DeleteMany(["a.txt", "b.txt"]);
+
+op.DeleteMany(op.EnumerateEntries("logs/")
+    .Where(e => e.Metadata.IsFile)
+    .Select(e => new DeleteTarget(e.Path)));
+```
+
+A `DeleteTarget` can carry `DeleteOptions`, for example to delete one version.
 
 ## Create a directory
 
@@ -223,6 +248,27 @@ op.Write("config.json", content, new WriteOptions { IfNotChanged = meta });
 
 The condition compares the version or the ETag, whichever the service
 supports.
+
+## Restore a deleted file
+
+On services with object versioning, `Restore` brings back the latest deleted
+state of a path, or a chosen version through `RestoreOptions`:
+
+```csharp
+op.Restore("path/to/file");
+```
+
+## Compose files
+
+On services that report `Capability.Compose`, `Compose` concatenates complete
+source files into a target in order without reading them through the client:
+
+```csharp
+var meta = op.Compose(["parts/0", "parts/1", "parts/2"], "result");
+```
+
+Each `ComposeSource` can carry `ComposeSourceOptions` to pin a version or guard
+a source.
 
 ## Generate a presigned URL
 
