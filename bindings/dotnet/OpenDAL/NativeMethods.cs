@@ -295,6 +295,31 @@ internal partial class NativeMethods
         long context
     );
 
+    [LibraryImport(__DllName, EntryPoint = "operator_lister_create", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALOperatorResult operator_lister_create(
+        Operator op,
+        string path,
+        OpenDALListOptions* options
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_lister_next")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial OpenDALEntryListResult operator_lister_next(ListerHandle lister, nuint max);
+
+    [LibraryImport(__DllName, EntryPoint = "operator_lister_next_async")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial OpenDALResult operator_lister_next_async(
+        ListerHandle lister,
+        nuint max,
+        delegate* unmanaged[Cdecl]<long, OpenDALEntryListResult, void> callback,
+        long context
+    );
+
+    [LibraryImport(__DllName, EntryPoint = "operator_lister_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static partial void operator_lister_free(IntPtr lister);
+
     #endregion
 
     #region Delete
