@@ -177,6 +177,17 @@ using OpenDAL.Options;
 var entries = op.List("dir/", new ListOptions { Recursive = true });
 ```
 
+`List` collects every entry before it returns. For a large tree,
+`EnumerateEntries` and `EnumerateEntriesAsync` fetch entries in batches while
+you iterate, so memory stays bounded:
+
+```csharp
+await foreach (var entry in op.EnumerateEntriesAsync("dir/", new ListOptions { Recursive = true }))
+{
+    Console.WriteLine(entry.Path);
+}
+```
+
 ## Delete a file or a whole tree
 
 ```csharp
@@ -196,10 +207,12 @@ op.DeleteMany(["a.txt", "b.txt"]);
 ```
 
 A `DeleteInput` can carry `DeleteOptions`, for example to delete one version.
-A listed `Entry` converts to a `DeleteInput` that keeps the entry's version:
+A listed `Entry` converts to a `DeleteInput` that keeps the entry's version.
+`EnumerateEntries` can feed `DeleteMany` directly, and neither side collects
+the listing first:
 
 ```csharp
-op.DeleteMany(op.List("logs/")
+op.DeleteMany(op.EnumerateEntries("logs/")
     .Where(e => e.Metadata.IsFile)
     .Select(e => (DeleteInput)e));
 ```
