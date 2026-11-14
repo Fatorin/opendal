@@ -55,6 +55,18 @@ using var fs = new Operator(new FsServiceConfig
 });
 ```
 
+### From a URI
+
+`Operator.FromUri` reads the service from the URI scheme, and the root and
+options from the rest of the URI. A dictionary adds to or overrides what the
+URI carries:
+
+```csharp
+using var op = Operator.FromUri("s3://my-bucket/data?region=us-east-1");
+
+using var fs = Operator.FromUri("fs:///tmp/opendal");
+```
+
 Available scheme names and their keys are defined by OpenDAL; see the
 [Scheme reference](https://docs.rs/opendal/latest/opendal/enum.Scheme.html) and
 [Services](/services).

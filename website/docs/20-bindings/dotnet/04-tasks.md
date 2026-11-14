@@ -177,6 +177,17 @@ using OpenDAL.Options;
 var entries = op.List("dir/", new ListOptions { Recursive = true });
 ```
 
+`List` collects every entry before it returns. For a large tree,
+`EnumerateEntries` and `EnumerateEntriesAsync` fetch entries in batches while
+you iterate, so memory stays bounded:
+
+```csharp
+await foreach (var entry in op.EnumerateEntriesAsync("dir/", new ListOptions { Recursive = true }))
+{
+    Console.WriteLine(entry.Path);
+}
+```
+
 ## Delete a file or a whole tree
 
 ```csharp
